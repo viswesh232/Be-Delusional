@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const isLocalDev = typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname);
-const baseURL = import.meta.env.VITE_API_URL || (isLocalDev ? 'http://localhost:5000/api' : 'https://true-eats-test.onrender.com/api');
+const baseURL = import.meta.env.VITE_API_URL;
 
 const API = axios.create({
     baseURL,
