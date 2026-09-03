@@ -77,7 +77,13 @@ const LiveOrders = () => {
                 {order.orderItems.map((item, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'flex-start', fontSize: '13px', fontWeight: '600', color: '#1e293b' }}>
                         <span style={{ backgroundColor: c.forest, color: '#fff', padding: '1px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: '800', marginRight: '8px', marginTop: '1px' }}>{item.qty}x</span>
-                        <span style={{ lineHeight: '1.3' }}>{item.name}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ lineHeight: '1.3' }}>{item.name}</span>
+                            <span style={{ fontSize: '11px', color: '#64748b' }}>
+                                Size: <strong style={{ color: '#09090b' }}>{item.size || 'M'}</strong>
+                                {item.color && item.color !== 'Standard' && ` • Color: ${item.color}`}
+                            </span>
+                        </div>
                     </div>
                 ))}
             </div>
@@ -105,12 +111,12 @@ const LiveOrders = () => {
                     <div style={{ display: 'flex', gap: '8px' }}>
                         {order.status === 'Placed' && (
                             <button onClick={() => handleStatusChange(order._id, 'Processing')} className="action-btn" style={{ backgroundColor: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', flex: 1 }}>
-                                Start Cooking <ChevronRight size={14} />
+                                Pick & Pack <ChevronRight size={14} />
                             </button>
                         )}
                         {order.status === 'Processing' && (
                             <button onClick={() => handleStatusChange(order._id, 'Preparing')} className="action-btn" style={{ backgroundColor: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', flex: 1 }}>
-                                Pack Order <ChevronRight size={14} />
+                                Quality Check <ChevronRight size={14} />
                             </button>
                         )}
                         {order.status === 'Preparing' && (

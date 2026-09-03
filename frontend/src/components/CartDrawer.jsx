@@ -184,7 +184,14 @@ const CartDrawer = ({ isOpen, onClose }) => {
                                                     style={{ cursor: 'pointer' }}
                                                 >
                                                     <div style={{ fontSize: '14px', fontWeight: 600, color: colors.text }}>{item.name}</div>
-                                                    <div style={{ fontSize: '12px', color: colors.muted, marginTop: '2px' }}>{item.weight || '1 item'}</div>
+                                                    <div style={{ fontSize: '12px', color: colors.muted, marginTop: '2px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                        <span style={{ fontWeight: 700, background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px', color: '#09090b' }}>
+                                                            Size: {item.size || item.selectedSize || 'M'}
+                                                        </span>
+                                                        {item.color && item.color !== 'Standard' && (
+                                                            <span>Color: {item.color}</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 <div style={{ fontSize: '14px', fontWeight: 700, color: colors.text }}>{formatPrice(item.price * item.qty)}</div>
                                             </div>

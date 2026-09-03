@@ -6,29 +6,19 @@ import './ChatBot.css';
 // ── FAQ engine ──────────────────────────────────────────────────────────────
 const FAQ = [
     {
-        keys: ['delivery', 'shipping', 'how long', 'when will', 'arrive', 'how many days', 'dispatch'],
-        answer: '📦 We deliver across India in **7–10 working days** after order placement. You\'ll get a tracking link on your email once dispatched!',
-        chips: ['Track my order', 'Return policy', 'Payment options'],
+        keys: ['size', 'fit', 'measurement', 'how to choose size', 'size guide', 'fitting', 'oversized'],
+        answer: '📏 Check the **Size Guide** button on any product page for chest, length, and shoulder measurements. For an oversized streetwear silhouette, order your standard size. For a snugger fit, size down!',
+        chips: ['Show products', 'Exchange policy', 'Track my order'],
     },
     {
-        keys: ['return', 'refund', 'money back', 'cancel order', 'exchange', 'damaged'],
-        answer: '↩️ Returns & refunds are accepted within **7 days** of delivery for damaged or incorrect items. Contact our support team and we\'ll sort it out quickly!',
-        chips: ['Contact support', 'Show products', 'Delivery time?'],
+        keys: ['return', 'exchange', 'size exchange', 'refund', 'wrong size', 'too tight', 'too loose'],
+        answer: '↩️ We provide a **7-Day Easy Size Exchange** guarantee! Go to **My Orders**, select your delivered garment, and click **"Exchange Size"** to request a new size in seconds.',
+        chips: ['Exchange policy', 'Go to My Orders', 'Contact support'],
     },
     {
-        keys: ['payment', 'pay', 'upi', 'card', 'net banking', 'razorpay', 'how to pay'],
-        answer: '💳 We accept **UPI, Debit/Credit Cards, and Net Banking** via Razorpay — India\'s most trusted payment gateway. No Cash on Delivery currently.',
-        chips: ['Delivery time?', 'Show products', 'Track my order'],
-    },
-    {
-        keys: ['shelf life', 'expire', 'expiry', 'best before', 'storage', 'how to store'],
-        answer: '🌿 Every product shows its **best before date** on the packaging. We ship well within shelf-life so you receive it at peak freshness!',
-        chips: ['Show products', 'Delivery time?', 'Ingredients info'],
-    },
-    {
-        keys: ['ingredient', 'allergen', 'contain', 'gluten', 'vegan', 'organic', 'nutrition'],
-        answer: '🌾 Full ingredient & allergen details are on each **product page**. Click any product, scroll down and you\'ll find the complete nutritional information.',
-        chips: ['Show products', 'Return policy', 'Contact support'],
+        keys: ['fabric', 'material', 'cotton', 'gsm', 'wash', 'care', 'washing', 'shrink'],
+        answer: '🌿 All our tees & hoodies are made of **heavyweight 240+ GSM combed cotton**, pre-shrunk to retain their shape. Wash cold and line dry in the shade for long-lasting quality!',
+        chips: ['Size guide', 'Show products', 'Delivery time?'],
     },
     {
         keys: ['track', 'order status', 'where is my order', 'order id', 'tracking number'],

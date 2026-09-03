@@ -13,14 +13,16 @@ const {
     sendOrderUpdate,
     recordFailedPayment,
     userCancelOrder,
+    requestExchangeOrReturn,
 } = require('../controllers/orderController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 // Static routes FIRST (must be before /:id)
-router.get('/stats/revenue',       protect, admin,    getRevenueStats);
-router.get('/myorders',            protect,           getMyOrders);
+router.get('/stats/revenue',          protect, admin, getRevenueStats);
+router.get('/myorders',               protect,        getMyOrders);
 router.post('/create-razorpay-order', protect,        createRazorpayOrder);
-router.post('/record-failed',      protect,           recordFailedPayment);
+router.post('/record-failed',         protect,        recordFailedPayment);
+router.post('/request-return',        protect,        requestExchangeOrReturn);
 
 // General
 router.post('/',   protect, createOrder);

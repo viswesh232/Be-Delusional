@@ -150,7 +150,9 @@ exports.updateUserProfile = async (req, res) => {
           doorNo: req.body.address.doorNo || user.address?.doorNo,
           colony: req.body.address.colony || user.address?.colony,
           city: req.body.address.city || user.address?.city,
+          state: req.body.address.state || user.address?.state,
           pincode: req.body.address.pincode || user.address?.pincode,
+          country: req.body.address.country || user.address?.country || 'India',
         };
       }
 

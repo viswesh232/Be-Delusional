@@ -141,7 +141,14 @@ const Cart = () => {
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                     <div>
                                                         <h3 style={{ margin: '0 0 4px', fontSize: '16px', fontWeight: 700, color: colors.text }}>{item.name}</h3>
-                                                        {item.weight && <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '6px' }}>{item.weight}</div>}
+                                                        <div style={{ fontSize: '13px', color: colors.muted, marginBottom: '6px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                            <span style={{ fontWeight: 700, background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px', color: '#09090b' }}>
+                                                                Size: {item.size || item.selectedSize || 'M'}
+                                                            </span>
+                                                            {item.color && item.color !== 'Standard' && (
+                                                                <span style={{ color: '#475569' }}>Color: {item.color}</span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div style={{ fontSize: '16px', fontWeight: 800, color: colors.text }}>{formatPrice(item.price)}</div>
                                                 </div>

@@ -3,22 +3,14 @@ import { useParams, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
+import { WishlistContext } from '../context/WishlistContext';
 import {
-    ArrowLeft, ShoppingCart, Star, ChevronLeft, ChevronRight,
-    Plus, Minus, Send, CheckCircle, Tag, Heart, Clock, Share2, Camera
+    ArrowLeft, ShoppingBag, Star, ChevronLeft, ChevronRight,
+    Heart, Share2, Camera, ShieldCheck, Truck, RefreshCw, Ruler, Check, MapPin
 } from 'lucide-react';
-import './ProductPage.css';
-import './Home.css';
-import { getImageUrl } from '../utils/helpers';
+import { getImageUrl, formatPrice } from '../utils/helpers';
+import SizeGuideModal from '../components/SizeGuideModal';
 
-const c = {
-    forest: '#1a4331', peach: '#fcd5ce', chocolate: '#4a2c2a',
-    white: '#fff', bg: '#fafafa', slate: '#64748b', light: '#f1f5f9',
-};
-
-const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
-
-// ── Star rating display ───────────────────────────────────────────────────────
 const Stars = ({ value, size = 16, interactive = false, onChange }) => (
     <div style={{ display: 'flex', gap: '2px' }}>
         {[1, 2, 3, 4, 5].map(n => (
@@ -26,599 +18,640 @@ const Stars = ({ value, size = 16, interactive = false, onChange }) => (
                 size={size}
                 fill={n <= value ? '#f59e0b' : 'none'}
                 color={n <= value ? '#f59e0b' : '#cbd5e1'}
-                style={{ cursor: interactive ? 'pointer' : 'default', transition: '0.1s' }}
+                style={{ cursor: interactive ? 'pointer' : 'default' }}
                 onClick={() => interactive && onChange && onChange(n)}
             />
         ))}
     </div>
 );
 
-// ── Average rating helper ────────────────────────────────────────────────────
-const avgRating = (reviews) => {
-    if (!reviews.length) return 0;
-    return (reviews.reduce((a, r) => a + r.rating, 0) / reviews.length).toFixed(1);
-};
-
-// ── Image carousel ───────────────────────────────────────────────────────────
-const Carousel = ({ images }) => {
-    const [idx, setIdx] = useState(0);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const list = images?.length > 0 ? images : [];
-
-    if (!list.length) return (
-        <div style={{ height: '420px', backgroundColor: '#f1f5f9', borderRadius: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ color: c.slate, fontSize: '14px' }}>No image available</span>
-        </div>
-    );
-
-    return (
-        <>
-            <div style={{ position: 'relative', borderRadius: '24px', overflow: 'hidden', backgroundColor: '#f8fafc', aspectRatio: '1/1', width: '100%' }}>
-
-                <img src={getImageUrl(list[idx])} alt=""
-                    onClick={() => setIsModalOpen(true)}
-                    style={{
-                        width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                        cursor: 'zoom-in', transition: '0.2s'
-                    }}
-                    onError={e => { e.target.src = 'https://placehold.co/600x500?text=No+Image'; }} />
-
-                {list.length > 1 && (
-                    <>
-                        <button onClick={(e) => { e.stopPropagation(); setIdx(i => (i - 1 + list.length) % list.length); }}
-                            style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'rgba(255,255,255,0.8)', color: '#1a3a2a', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-                            <ChevronLeft size={20} />
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); setIdx(i => (i + 1) % list.length); }}
-                            style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'rgba(255,255,255,0.8)', color: '#1a3a2a', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-                            <ChevronRight size={20} />
-                        </button>
-                        {/* Thumbnails */}
-                        <div style={{ display: 'flex', gap: '10px', padding: '16px', position: 'absolute', bottom: 0, left: 0, right: 0, overflowX: 'auto', justifyContent: 'center' }}>
-                            {list.map((img, i) => (
-                                <img key={i} src={getImageUrl(img)} alt=""
-                                    onClick={(e) => { e.stopPropagation(); setIdx(i); }}
-                                    style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '10px', cursor: 'pointer', border: i === idx ? `2px solid ${c.forest}` : '2px solid transparent', opacity: i === idx ? 1 : 0.7, transition: 'all 0.2s', flexShrink: 0, backgroundColor: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }} />
-                            ))}
-                        </div>
-                    </>
-                )}
-            </div>
-
-            {/* Lightbox Modal */}
-            {isModalOpen && (
-                <div
-                    onClick={() => setIsModalOpen(false)}
-                    style={{
-                        position: 'fixed', inset: 0, zIndex: 10000,
-                        backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
-                        overflowY: 'auto', padding: '60px 20px', cursor: 'zoom-out'
-                    }}
-                >
-                    <button
-                        onClick={() => setIsModalOpen(false)}
-                        style={{
-                            position: 'fixed', top: '24px', right: '32px',
-                            background: '#fff', border: 'none', borderRadius: '50%',
-                            width: '44px', height: '44px', fontSize: '24px', fontWeight: 'bold',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: '#111', boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                            zIndex: 10001
-                        }}
-                    >✕</button>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-                        {list.map((img, i) => (
-                            <img
-                                key={i} src={getImageUrl(img)} alt=""
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                    width: '100%', height: 'auto', objectFit: 'contain',
-                                    borderRadius: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-                                    cursor: 'default', backgroundColor: '#fff'
-                                }}
-                            />
-                        ))}
-                    </div>
-                </div>
-            )}
-        </>
-    );
-};
-
-// ── Accordion ────────────────────────────────────────────────────────────────
-const Accordion = ({ title, icon: Icon, children }) => {
-    const [open, setOpen] = useState(false);
-    return (
-        <div className="accordion">
-            <button className="accordion-header" onClick={() => setOpen(!open)}>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                    {Icon && <Icon size={18} />}
-                    <span style={{ fontWeight: '700' }}>{title}</span>
-                </div>
-                {open ? <Minus size={16} /> : <Plus size={16} />}
-            </button>
-            {open && <div className="accordion-body">{children}</div>}
-        </div>
-    );
-};
-
-// ────────────────────────────────────────────────────────────────────────────
-const ProductPage = () => {
+export default function ProductPage() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useContext(AuthContext);
-    const { addToCart, cartItems } = useContext(CartContext);
+    const { addToCart } = useContext(CartContext);
+    const { isInWishlist, toggleWishlist } = useContext(WishlistContext);
 
     const [product, setProduct] = useState(null);
-    const [allProducts, setAllProducts] = useState([]);
-    const [reviews, setReviews] = useState([]);
-    const [qty, setQty] = useState(1);
-    const [toast, setToast] = useState('');
     const [loading, setLoading] = useState(true);
+    const [activeImageIdx, setActiveImageIdx] = useState(0);
 
-    const [weight, setWeight] = useState('');
+    const [selectedSize, setSelectedSize] = useState('');
+    const [selectedColor, setSelectedColor] = useState(null);
+    const [qty, setQty] = useState(1);
+    const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
+    const [addedToast, setAddedToast] = useState(false);
 
-    // Review form
-    const [myRating, setMyRating] = useState(0);
-    const [myTitle, setMyTitle] = useState('');
-    const [myBody, setMyBody] = useState('');
-    const [myImages, setMyImages] = useState([]);
-    const [submitting, setSubmitting] = useState(false);
-    const [reviewError, setReviewError] = useState('');
+    // Pincode estimator
+    const [pincode, setPincode] = useState('');
+    const [pincodeChecked, setPincodeChecked] = useState(false);
 
-    const totalCartQty = cartItems.reduce((a, i) => a + i.qty, 0);
-
-    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
-
-    const fetchReviews = async (productId) => {
-        try {
-            const { data } = await API.get(`/reviews/${productId}`);
-            setReviews(data);
-        } catch {
-            console.error('Failed to fetch reviews');
-        }
-    };
-
-    // SEO Meta Tags
-    useEffect(() => {
-        if (product) {
-            document.title = `${product.name} | True Eats`;
-
-            let metaDesc = document.querySelector('meta[name="description"]');
-            if (!metaDesc) {
-                metaDesc = document.createElement('meta');
-                metaDesc.name = "description";
-                document.head.appendChild(metaDesc);
-            }
-            metaDesc.content = product.description ? product.description.substring(0, 150) + '...' : 'Delicious food from True Eats.';
-
-            let ogImage = document.querySelector('meta[property="og:image"]');
-            if (!ogImage) {
-                ogImage = document.createElement('meta');
-                ogImage.setAttribute('property', 'og:image');
-                document.head.appendChild(ogImage);
-            }
-            const mainImg = (product.images && product.images[0]) ? product.images[0] : product.image;
-            if (mainImg) ogImage.content = mainImg;
-
-            let ogTitle = document.querySelector('meta[property="og:title"]');
-            if (!ogTitle) {
-                ogTitle = document.createElement('meta');
-                ogTitle.setAttribute('property', 'og:title');
-                document.head.appendChild(ogTitle);
-            }
-            ogTitle.content = product.name;
-        }
-
-        // Cleanup title on unmount
-        return () => { document.title = 'True Eats'; };
-    }, [product]);
+    // Reviews
+    const [reviews, setReviews] = useState([]);
+    const [reviewForm, setReviewForm] = useState({
+        rating: 5,
+        title: '',
+        body: '',
+        fitFeedback: 'True to Size',
+        sizePurchased: '',
+        customerHeight: '',
+    });
+    const [reviewFiles, setReviewFiles] = useState([]);
+    const [submittingReview, setSubmittingReview] = useState(false);
+    const [activeTab, setActiveTab] = useState('details'); // 'details' | 'care' | 'shipping'
 
     useEffect(() => {
-        const load = async () => {
-            try {
-                const { data } = await API.get('/products');
-                setAllProducts(data);
-                const found = data.find(p => p.slug === id || p._id === id);
-                if (!found) { navigate('/'); return; }
-                setProduct(found);
-                if (found.weights?.length > 0) setWeight(found.weights[0].weight);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-                await fetchReviews(found._id);
-            } catch { navigate('/'); }
-            setLoading(false);
-        };
+        setLoading(true);
+        API.get(`/products/${id}`)
+            .then(res => {
+                const p = res.data;
+                setProduct(p);
+                if (p.sizes && p.sizes.length > 0) {
+                    setSelectedSize(p.sizes[0]);
+                }
+                if (p.colors && p.colors.length > 0) {
+                    setSelectedColor(p.colors[0]);
+                }
+            })
+            .catch(err => console.error('Failed to load product', err))
+            .finally(() => setLoading(false));
 
-        load();
-    }, [id, navigate]);
+        API.get(`/reviews/${id}`)
+            .then(res => setReviews(res.data))
+            .catch(err => console.error('Failed to load reviews', err));
+    }, [id]);
 
-    const selectedWeightPrice = product?.weights?.find(w => w.weight === weight)?.price || product?.price || 0;
+    if (loading) {
+        return (
+            <div style={{ padding: '80px 20px', textAlign: 'center', minHeight: '60vh' }}>
+                <div style={{ fontSize: '18px', fontWeight: '600', color: '#71717a' }}>Loading garment details...</div>
+            </div>
+        );
+    }
+
+    if (!product) {
+        return (
+            <div style={{ padding: '80px 20px', textAlign: 'center', minHeight: '60vh' }}>
+                <h2>Product not found</h2>
+                <button onClick={() => navigate('/')} style={{ marginTop: '16px', padding: '10px 20px', background: '#09090b', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+                    Back to Collection
+                </button>
+            </div>
+        );
+    }
+
+    const images = (product.images && product.images.length > 0)
+        ? product.images
+        : (product.image ? [product.image] : ['https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800']);
+
+    const hasDiscount = product.discountPrice && product.discountPrice > 0 && product.discountPrice < product.price;
+    const currentPrice = hasDiscount ? product.discountPrice : product.price;
+
+    const currentVariant = Array.isArray(product.variants) 
+        ? product.variants.find(v => v.size === selectedSize)
+        : null;
+    const currentStock = currentVariant ? currentVariant.stock : 20;
+    const isOutOfStock = currentVariant && currentVariant.stock <= 0;
 
     const handleAddToCart = () => {
-        addToCart({ ...product, price: selectedWeightPrice, weight: weight }, qty);
-        showToast(`${qty} × ${product.name} (${weight}) added to cart`);
+        if (!selectedSize) {
+            alert('Please select a size first');
+            return;
+        }
+        addToCart(product, qty, {
+            size: selectedSize,
+            color: selectedColor ? selectedColor.name : 'Standard',
+            colorHex: selectedColor ? selectedColor.hex : '#000000'
+        });
+        setAddedToast(true);
+        setTimeout(() => setAddedToast(false), 2500);
     };
 
-    const handleBuyNow = () => {
-        addToCart({ ...product, price: selectedWeightPrice, weight: weight }, qty);
-        navigate('/cart');
-    };
-
-    const handleSubmitReview = async () => {
-        if (!user) { navigate('/login'); return; }
-        if (myRating === 0) { setReviewError('Please select a star rating'); return; }
-        if (!myBody.trim()) { setReviewError('Please write your review'); return; }
-        setReviewError('');
-        setSubmitting(true);
+    const handleReviewSubmit = async (e) => {
+        e.preventDefault();
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        setSubmittingReview(true);
         try {
             const fd = new FormData();
-            fd.append('rating', myRating);
-            fd.append('title', myTitle);
-            fd.append('body', myBody);
-            myImages.forEach(file => fd.append('images', file));
+            fd.append('rating', reviewForm.rating);
+            fd.append('title', reviewForm.title);
+            fd.append('body', reviewForm.body);
+            fd.append('fitFeedback', reviewForm.fitFeedback);
+            fd.append('sizePurchased', reviewForm.sizePurchased || selectedSize);
+            fd.append('customerHeight', reviewForm.customerHeight);
 
-            await API.post(`/reviews/${product._id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setMyRating(0); setMyTitle(''); setMyBody(''); setMyImages([]);
-            fetchReviews(product._id);
-            showToast('Review submitted! Thank you');
+            reviewFiles.forEach(f => fd.append('images', f));
+
+            const res = await API.post(`/reviews/${product._id}`, fd, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            setReviews([res.data, ...reviews]);
+            setReviewForm({ rating: 5, title: '', body: '', fitFeedback: 'True to Size', sizePurchased: '', customerHeight: '' });
+            setReviewFiles([]);
+            alert('Thank you for reviewing your fit!');
         } catch (err) {
-            setReviewError(err.response?.data?.message || 'Failed to submit review');
+            alert(err.response?.data?.message || 'Failed to submit review');
+        } finally {
+            setSubmittingReview(false);
         }
-        setSubmitting(false);
     };
 
-    const alreadyReviewed = reviews.some(r => r.user === user?._id);
-    const avg = avgRating(reviews);
+    const avgRating = reviews.length > 0 
+        ? (reviews.reduce((a, r) => a + r.rating, 0) / reviews.length).toFixed(1)
+        : '4.9';
 
-    // Rating breakdown
-    const breakdown = [5, 4, 3, 2, 1].map(n => ({
-        n,
-        count: reviews.filter(r => r.rating === n).length,
-        pct: reviews.length ? Math.round((reviews.filter(r => r.rating === n).length / reviews.length) * 100) : 0,
-    }));
+    const trueToSizeCount = reviews.filter(r => r.fitFeedback === 'True to Size').length;
+    const trueToSizePercent = reviews.length > 0 ? Math.round((trueToSizeCount / reviews.length) * 100) : 92;
 
-    if (loading) return (
-        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: c.slate, fontFamily: 'sans-serif' }}>
-            Loading...
-        </div>
-    );
-    if (!product) return null;
-
-    const inp = { width: '100%', padding: '12px 14px', borderRadius: '12px', border: '2px solid #e2e8f0', fontSize: '14px', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', backgroundColor: c.white };
-    const origPrice = product.originalPrice || product.comparePrice || product.price * 1.2;
+    const isFav = isInWishlist(product._id);
 
     return (
-        <div className="product-page-container">
-
-            {/* Toast */}
-            {toast && (
-                <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', backgroundColor: c.forest, color: '#fff', padding: '13px 26px', borderRadius: '50px', fontWeight: 'bold', zIndex: 999, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
-                    <CheckCircle size={16} color={c.peach} /> {toast}
+        <div style={{ backgroundColor: '#ffffff', minHeight: '100vh', padding: '30px 20px 80px', fontFamily: 'inherit' }}>
+            <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+                
+                {/* Back Button & Breadcrumbs */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', fontSize: '13px', color: '#71717a' }}>
+                    <button 
+                        onClick={() => navigate(-1)}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '6px',
+                            background: 'none', border: 'none', cursor: 'pointer',
+                            fontSize: '13px', fontWeight: '600', color: '#09090b', padding: 0
+                        }}
+                    >
+                        <ArrowLeft size={16} /> Back
+                    </button>
+                    <span>/</span>
+                    <span>{product.gender || 'Unisex'}</span>
+                    <span>/</span>
+                    <span>{product.category}</span>
+                    <span>/</span>
+                    <span style={{ color: '#09090b', fontWeight: '600' }}>{product.name}</span>
                 </div>
-            )}
 
-
-
-            <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 24px' }}>
-
-                {/* ── BACK BUTTON ── */}
-                <button
-                    onClick={() => navigate(-1)}
-                    style={{
-                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: c.forest, fontWeight: '700', fontSize: '14px',
-                        marginBottom: '24px', padding: '8px 0'
-                    }}
-                >
-                    <ArrowLeft size={18} /> Back
-                </button>
-
-                {/* ── PRODUCT SECTION ── */}
-                <div className="product-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', marginBottom: '64px' }}>
-
-                    {/* Left — images */}
+                {/* Main Product Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '48px', alignItems: 'start' }}>
+                    
+                    {/* Left: Gallery */}
                     <div>
-                        <Carousel images={product.images || (product.image ? [product.image] : [])} />
+                        <div style={{
+                            position: 'relative',
+                            width: '100%',
+                            paddingTop: '125%', // 4:5 fashion aspect ratio
+                            borderRadius: '16px',
+                            overflow: 'hidden',
+                            backgroundColor: '#f4f4f5',
+                            border: '1px solid #e5e7eb'
+                        }}>
+                            <img 
+                                src={getImageUrl(images[activeImageIdx])} 
+                                alt={product.name}
+                                style={{
+                                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                                    objectFit: 'cover'
+                                }}
+                            />
+
+                            {/* Wishlist Button */}
+                            <button
+                                onClick={() => toggleWishlist(product)}
+                                style={{
+                                    position: 'absolute', top: '16px', right: '16px',
+                                    width: '42px', height: '42px', borderRadius: '50%',
+                                    background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(4px)',
+                                    border: 'none', cursor: 'pointer', display: 'flex',
+                                    alignItems: 'center', justifyContent: 'center',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)'
+                                }}
+                            >
+                                <Heart size={20} color={isFav ? '#ef4444' : '#09090b'} fill={isFav ? '#ef4444' : 'none'} />
+                            </button>
+                        </div>
+
+                        {/* Thumbnails */}
+                        {images.length > 1 && (
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '16px', overflowX: 'auto', paddingBottom: '8px' }}>
+                                {images.map((img, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => setActiveImageIdx(idx)}
+                                        style={{
+                                            width: '76px', height: '96px', borderRadius: '8px',
+                                            overflow: 'hidden', border: activeImageIdx === idx ? '2px solid #09090b' : '1px solid #e5e7eb',
+                                            padding: 0, cursor: 'pointer', flexShrink: 0, background: '#f4f4f5'
+                                        }}
+                                    >
+                                        <img src={getImageUrl(img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Right — details */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {/* Right: Product Details & Buying Controls */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                        
+                        <div>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: '#71717a', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                                {product.brand || 'True Threads'} • {product.gender || 'Unisex'}
+                            </div>
+                            <h1 style={{ margin: '6px 0 10px', fontSize: '32px', fontWeight: '800', color: '#09090b', letterSpacing: '-0.5px' }}>
+                                {product.name}
+                            </h1>
 
-                        {/* Category + availability */}
-                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                            <span style={{ color: c.slate, fontSize: '14px', letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: '600' }}>
-                                True Eats
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <Stars value={Math.round(avgRating)} size={16} />
+                                <span style={{ fontSize: '14px', fontWeight: '700', color: '#09090b' }}>{avgRating}</span>
+                                <span style={{ fontSize: '13px', color: '#71717a' }}>({reviews.length} reviews)</span>
+                                <span style={{ color: '#d4d4d8' }}>•</span>
+                                <span style={{ fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>{trueToSizePercent}% said True to Size</span>
+                            </div>
+                        </div>
+
+                        {/* Price Display */}
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', borderBottom: '1px solid #f4f4f5', paddingBottom: '16px' }}>
+                            <span style={{ fontSize: '28px', fontWeight: '800', color: '#09090b' }}>
+                                {formatPrice(currentPrice)}
                             </span>
-                            {!product.isAvailable && (
-                                <span style={{ backgroundColor: '#111', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px' }}>
-                                    Sold out
-                                </span>
+                            {hasDiscount && (
+                                <>
+                                    <span style={{ fontSize: '18px', color: '#a1a1aa', textDecoration: 'line-through' }}>
+                                        {formatPrice(product.price)}
+                                    </span>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#ef4444', background: '#fee2e2', padding: '3px 8px', borderRadius: '4px' }}>
+                                        SAVE {Math.round(((product.price - product.discountPrice) / product.price) * 100)}%
+                                    </span>
+                                </>
                             )}
-                            {origPrice > product.price && (
-                                <span style={{ backgroundColor: '#111', color: '#fff', fontSize: '12px', fontWeight: '700', padding: '4px 12px', borderRadius: '20px' }}>
-                                    Sale
-                                </span>
-                            )}
+                            <span style={{ fontSize: '12px', color: '#71717a' }}>Inclusive of all taxes</span>
                         </div>
 
-                        {/* Name */}
-                        <h1 style={{ margin: 0, fontSize: '36px', fontWeight: '900', color: c.chocolate, lineHeight: '1.2' }}>{product.name}</h1>
-
-                        {/* Rating summary */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => document.getElementById('reviews-section')?.scrollIntoView({ behavior: 'smooth' })}>
-                            <Stars value={Math.round(avg)} size={18} />
-                            <span style={{ fontWeight: '800', fontSize: '15px', color: c.chocolate }}>{avg}</span>
-                            <span style={{ color: '#3b82f6', fontSize: '14px', textDecoration: 'underline' }}>{reviews.length} reviews</span>
-                        </div>
-
-                        {/* Price */}
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px', margin: '4px 0' }}>
-                            <span style={{ fontSize: '28px', fontWeight: '900', color: '#111' }}>{fmt(selectedWeightPrice)}</span>
-                            {origPrice > selectedWeightPrice && (
-                                <span style={{ fontSize: '18px', color: '#94a3b8', textDecoration: 'line-through' }}>{fmt(origPrice)}</span>
-                            )}
-                        </div>
-                        <div style={{ fontSize: '13px', color: c.slate, marginTop: '-12px' }}>Taxes included. Discounts and shipping calculated at checkout.</div>
-
-                        {/* Description */}
-                        <p style={{ color: '#475569', fontSize: '15px', lineHeight: '1.7', margin: '8px 0' }}>{product.description}</p>
-
-                        <hr style={{ borderTop: '1px solid #e2e8f0', margin: '8px 0', borderBottom: 'none' }} />
-
-                        {/* Variants */}
-                        {product.weights && product.weights.length > 0 && (
-                            <fieldset className="variant-fieldset">
-                                <legend className="variant-legend">Weight</legend>
-                                <div className="pill-group">
-                                    {product.weights.map(w => (
-                                        <button key={w.weight} className={`variant-pill ${weight === w.weight ? 'active' : ''}`} onClick={() => setWeight(w.weight)}>{w.weight}</button>
+                        {/* Colors */}
+                        {product.colors && product.colors.length > 0 && (
+                            <div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                    <span style={{ fontSize: '13px', fontWeight: '700', color: '#09090b', textTransform: 'uppercase' }}>
+                                        Color: <span style={{ fontWeight: '500', color: '#71717a' }}>{selectedColor ? selectedColor.name : 'Standard'}</span>
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '10px' }}>
+                                    {product.colors.map(col => (
+                                        <button
+                                            key={col.name}
+                                            onClick={() => setSelectedColor(col)}
+                                            title={col.name}
+                                            style={{
+                                                width: '32px', height: '32px', borderRadius: '50%',
+                                                backgroundColor: col.hex || '#000000',
+                                                border: selectedColor?.name === col.name ? '3px solid #09090b' : '1px solid #e5e7eb',
+                                                outline: selectedColor?.name === col.name ? '2px solid #ffffff' : 'none',
+                                                cursor: 'pointer'
+                                            }}
+                                        />
                                     ))}
                                 </div>
-                            </fieldset>
+                            </div>
                         )}
 
-                        {/* Quantity */}
-                        <div style={{ marginBottom: '16px' }}>
-                            <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', color: c.chocolate, marginBottom: '8px' }}>Quantity</label>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '16px', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '6px 12px', backgroundColor: c.bg }}>
-                                <button onClick={() => setQty(q => Math.max(1, q - 1))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#111', display: 'flex' }}>
-                                    <Minus size={16} />
-                                </button>
-                                <span style={{ fontWeight: '700', fontSize: '16px', minWidth: '32px', textAlign: 'center' }}>{qty}</span>
-                                <button onClick={() => setQty(q => q + 1)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#111', display: 'flex' }}>
-                                    <Plus size={16} />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Badges Row */}
-                        <div className="badges-row">
-                            <img src="https://cdn.shopify.com/s/files/1/0612/9690/2243/files/Hygenic.png?v=1764496263" alt="Hygienic" />
-                            <img src="https://cdn.shopify.com/s/files/1/0612/9690/2243/files/International_Shipping.png?v=1764496263" alt="International Shipping" />
-                            <img src="https://cdn.shopify.com/s/files/1/0612/9690/2243/files/Halal.png?v=1764496264" alt="Halal" />
-                            <img src="https://cdn.shopify.com/s/files/1/0612/9690/2243/files/Secured_Payment.png?v=1764496263" alt="Secured Payment" />
-                        </div>
-
-                        {/* Action Buttons */}
-                        {product.isAvailable ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <button onClick={handleAddToCart} style={{ width: '100%', padding: '16px', backgroundColor: 'transparent', color: c.forest, border: `1.5px solid ${c.forest}`, borderRadius: '4px', fontWeight: '800', cursor: 'pointer', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                                    Add to Cart
-                                </button>
-                                <button onClick={handleBuyNow} style={{ width: '100%', padding: '16px', backgroundColor: '#5a31f4', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: '800', cursor: 'pointer', fontSize: '15px', textTransform: 'uppercase', letterSpacing: '0.05em', backgroundImage: 'linear-gradient(to right, #5a31f4, #8b5cf6)' }}>
-                                    Buy It Now
-                                </button>
-                            </div>
-                        ) : (
-                            <button disabled style={{ width: '100%', padding: '16px', backgroundColor: '#e2e8f0', color: '#94a3b8', border: 'none', borderRadius: '4px', fontWeight: '800', cursor: 'not-allowed', fontSize: '15px', textTransform: 'uppercase' }}>
-                                Sold Out
-                            </button>
-                        )}
-
-                        {/* Accordions */}
-                        <div style={{ marginTop: '24px' }}>
-                            {product.ingredients && (
-                                <Accordion title="Ingredients" icon={Heart}>
-                                    <p style={{ margin: '0', whiteSpace: 'pre-line' }}>{product.ingredients}</p>
-                                </Accordion>
-                            )}
-                            {product.shelfLife && (
-                                <Accordion title="Shelf Life" icon={Clock}>
-                                    <p style={{ margin: '0', whiteSpace: 'pre-line' }}>{product.shelfLife}</p>
-                                </Accordion>
-                            )}
-                            {product.instructions && (
-                                <Accordion title="Instructions" icon={Tag}>
-                                    <p style={{ margin: '0', whiteSpace: 'pre-line' }}>{product.instructions}</p>
-                                </Accordion>
-                            )}
-                        </div>
-
-                        {/* Share */}
-                        <button onClick={() => { navigator.clipboard.writeText(window.location.href); showToast('Link copied to clipboard!'); }} style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'none', color: c.chocolate, cursor: 'pointer', marginTop: '16px', fontWeight: '600', fontSize: '14px' }}>
-                            <Share2 size={16} /> Share
-                        </button>
-                    </div>
-                </div>
-
-                {/* ── REVIEWS SECTION ── */}
-                <div id="reviews-section" style={{ borderTop: '2px solid #f1f5f9', paddingTop: '48px' }}>
-                    <h2 style={{ margin: '0 0 32px', fontSize: '24px', fontWeight: '900', color: c.chocolate, textAlign: 'center' }}>
-                        Customer Reviews
-                    </h2>
-
-                    <div className="reviews-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', alignItems: 'start' }}>
-
-                        {/* Rating summary + breakdown */}
+                        {/* Size Selection & Guide */}
                         <div>
-                            {reviews.length > 0 ? (
-                                <div style={{ backgroundColor: c.white, borderRadius: '20px', padding: '28px', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '24px' }}>
-                                        <div style={{ textAlign: 'center' }}>
-                                            <div style={{ fontSize: '52px', fontWeight: '900', color: '#111', lineHeight: 1 }}>{avg}</div>
-                                            <Stars value={Math.round(avg)} size={20} />
-                                            <div style={{ fontSize: '13px', color: c.slate, marginTop: '4px' }}>{reviews.length} reviews</div>
-                                        </div>
-                                        <div style={{ flex: 1 }}>
-                                            {breakdown.map(b => (
-                                                <div key={b.n} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                    <span style={{ fontSize: '12px', color: c.slate, width: '10px', textAlign: 'right' }}>{b.n}</span>
-                                                    <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                                                    <div style={{ flex: 1, height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                                                        <div style={{ width: `${b.pct}%`, height: '100%', backgroundColor: '#f59e0b', borderRadius: '4px', transition: '0.4s' }} />
-                                                    </div>
-                                                    <span style={{ fontSize: '12px', color: c.slate, width: '28px' }}>{b.count}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div style={{ backgroundColor: c.white, borderRadius: '20px', padding: '32px', textAlign: 'center', border: '1px solid #e2e8f0', marginBottom: '24px' }}>
-                                    <Star size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
-                                    <p style={{ color: c.slate, margin: 0, fontSize: '15px', fontWeight: '600' }}>No reviews yet</p>
-                                    <p style={{ color: '#94a3b8', fontSize: '13px', margin: '6px 0 0' }}>Be the first to share your experience</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#09090b', textTransform: 'uppercase' }}>
+                                    Select Size
+                                </span>
+                                <button
+                                    onClick={() => setIsSizeGuideOpen(true)}
+                                    style={{
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                        background: 'none', border: 'none', color: '#2563eb',
+                                        fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+                                    }}
+                                >
+                                    <Ruler size={14} /> Size Guide
+                                </button>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                {(product.sizes && product.sizes.length > 0 ? product.sizes : ['S', 'M', 'L', 'XL']).map(s => {
+                                    const variant = product.variants?.find(v => v.size === s);
+                                    const outOfStock = variant && variant.stock <= 0;
+                                    const isSelected = selectedSize === s;
+
+                                    return (
+                                        <button
+                                            key={s}
+                                            disabled={outOfStock}
+                                            onClick={() => setSelectedSize(s)}
+                                            style={{
+                                                minWidth: '54px', height: '44px',
+                                                borderRadius: '8px',
+                                                border: isSelected ? '2px solid #09090b' : '1px solid #e4e4e7',
+                                                background: isSelected ? '#09090b' : (outOfStock ? '#f4f4f5' : '#ffffff'),
+                                                color: isSelected ? '#ffffff' : (outOfStock ? '#a1a1aa' : '#09090b'),
+                                                fontSize: '14px', fontWeight: '700',
+                                                cursor: outOfStock ? 'not-allowed' : 'pointer',
+                                                textDecoration: outOfStock ? 'line-through' : 'none',
+                                                position: 'relative'
+                                            }}
+                                        >
+                                            {s}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Urgency Stock Message */}
+                            {currentStock > 0 && currentStock <= 5 && (
+                                <div style={{ fontSize: '13px', color: '#d97706', fontWeight: '600', marginTop: '8px' }}>
+                                    ⚡ Only {currentStock} left in Size {selectedSize} — order soon!
                                 </div>
                             )}
+                            {isOutOfStock && (
+                                <div style={{ fontSize: '13px', color: '#dc2626', fontWeight: '600', marginTop: '8px' }}>
+                                    ✕ Size {selectedSize} is currently sold out.
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Write a review */}
-                            <div style={{ backgroundColor: c.white, borderRadius: '20px', padding: '24px', border: '1px solid #e2e8f0' }}>
-                                <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '800', color: c.forest }}>
-                                    {alreadyReviewed ? 'You have already reviewed this product' : user ? 'Write a Review' : 'Login to write a review'}
-                                </h3>
+                        {/* Quantity & CTA */}
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '8px' }}>
+                            <div style={{
+                                display: 'flex', alignItems: 'center', border: '1px solid #e4e4e7',
+                                borderRadius: '8px', overflow: 'hidden'
+                            }}>
+                                <button
+                                    onClick={() => setQty(Math.max(1, qty - 1))}
+                                    style={{ width: '40px', height: '48px', background: '#fafafa', border: 'none', cursor: 'pointer', fontWeight: '700' }}
+                                >
+                                    -
+                                </button>
+                                <span style={{ width: '40px', textAlign: 'center', fontWeight: '700', fontSize: '15px' }}>{qty}</span>
+                                <button
+                                    onClick={() => setQty(qty + 1)}
+                                    style={{ width: '40px', height: '48px', background: '#fafafa', border: 'none', cursor: 'pointer', fontWeight: '700' }}
+                                >
+                                    +
+                                </button>
+                            </div>
 
-                                {!user ? (
-                                    <button onClick={() => navigate('/login')} style={{ width: '100%', padding: '12px', backgroundColor: c.forest, color: '#fff', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                                        Login to Review
-                                    </button>
-                                ) : alreadyReviewed ? (
-                                    <div style={{ backgroundColor: '#f0fdf4', padding: '14px', borderRadius: '12px', fontSize: '14px', color: '#065f46', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <CheckCircle size={16} /> Your review has been submitted
+                            <button
+                                disabled={isOutOfStock}
+                                onClick={handleAddToCart}
+                                style={{
+                                    flex: 1, height: '48px',
+                                    background: isOutOfStock ? '#a1a1aa' : '#09090b',
+                                    color: '#ffffff', border: 'none', borderRadius: '8px',
+                                    fontSize: '15px', fontWeight: '700', cursor: isOutOfStock ? 'not-allowed' : 'pointer',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                                    transition: 'background 0.2s ease'
+                                }}
+                            >
+                                <ShoppingBag size={18} />
+                                {isOutOfStock ? 'Sold Out' : 'Add to Bag'}
+                            </button>
+                        </div>
+
+                        {addedToast && (
+                            <div style={{
+                                padding: '10px 14px', borderRadius: '8px', background: '#f0fdf4',
+                                border: '1px solid #bbf7d0', color: '#16a34a', fontSize: '14px',
+                                fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'
+                            }}>
+                                <Check size={16} /> Added {selectedSize} to your shopping bag!
+                            </div>
+                        )}
+
+                        {/* Pincode Estimator */}
+                        <div style={{
+                            padding: '16px', borderRadius: '12px', background: '#fafafa',
+                            border: '1px solid #f4f4f5', marginTop: '10px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '700', color: '#09090b', marginBottom: '8px' }}>
+                                <MapPin size={16} /> Check Delivery & COD Availability
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                                <input 
+                                    placeholder="Enter 6-digit Pincode"
+                                    value={pincode} onChange={e => setPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                    style={{
+                                        padding: '8px 12px', borderRadius: '6px', border: '1px solid #e4e4e7',
+                                        fontSize: '13px', width: '180px', outline: 'none'
+                                    }}
+                                />
+                                <button
+                                    onClick={() => setPincodeChecked(pincode.length === 6)}
+                                    style={{
+                                        padding: '8px 16px', borderRadius: '6px', background: '#09090b',
+                                        color: '#ffffff', border: 'none', fontSize: '13px', fontWeight: '600', cursor: 'pointer'
+                                    }}
+                                >
+                                    Check
+                                </button>
+                            </div>
+                            {pincodeChecked && (
+                                <div style={{ fontSize: '12px', color: '#16a34a', marginTop: '8px', fontWeight: '600' }}>
+                                    ✓ Delivery within 3–5 working days • Cash on Delivery available!
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Trust Badges */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '12px', borderTop: '1px solid #f4f4f5' }}>
+                            <div style={{ textAlign: 'center', padding: '10px', background: '#ffffff' }}>
+                                <Truck size={20} color="#09090b" style={{ margin: '0 auto 6px' }} />
+                                <div style={{ fontSize: '12px', fontWeight: '700' }}>Fast Dispatch</div>
+                                <div style={{ fontSize: '11px', color: '#71717a' }}>Shipped in 24-48 hrs</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '10px', background: '#ffffff' }}>
+                                <RefreshCw size={20} color="#09090b" style={{ margin: '0 auto 6px' }} />
+                                <div style={{ fontSize: '12px', fontWeight: '700' }}>7-Day Exchange</div>
+                                <div style={{ fontSize: '11px', color: '#71717a' }}>Hassle-free sizing</div>
+                            </div>
+                            <div style={{ textAlign: 'center', padding: '10px', background: '#ffffff' }}>
+                                <ShieldCheck size={20} color="#09090b" style={{ margin: '0 auto 6px' }} />
+                                <div style={{ fontSize: '12px', fontWeight: '700' }}>100% Cotton</div>
+                                <div style={{ fontSize: '11px', color: '#71717a' }}>Premium quality</div>
+                            </div>
+                        </div>
+
+                        {/* Tabs: Specifications & Care */}
+                        <div style={{ marginTop: '16px' }}>
+                            <div style={{ display: 'flex', borderBottom: '1px solid #e4e4e7', gap: '20px' }}>
+                                <button
+                                    onClick={() => setActiveTab('details')}
+                                    style={{
+                                        padding: '10px 0', background: 'none', border: 'none',
+                                        fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                                        borderBottom: activeTab === 'details' ? '2px solid #09090b' : '2px solid transparent',
+                                        color: activeTab === 'details' ? '#09090b' : '#71717a'
+                                    }}
+                                >
+                                    Garment Specs
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('care')}
+                                    style={{
+                                        padding: '10px 0', background: 'none', border: 'none',
+                                        fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                                        borderBottom: activeTab === 'care' ? '2px solid #09090b' : '2px solid transparent',
+                                        color: activeTab === 'care' ? '#09090b' : '#71717a'
+                                    }}
+                                >
+                                    Wash & Care
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('shipping')}
+                                    style={{
+                                        padding: '10px 0', background: 'none', border: 'none',
+                                        fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+                                        borderBottom: activeTab === 'shipping' ? '2px solid #09090b' : '2px solid transparent',
+                                        color: activeTab === 'shipping' ? '#09090b' : '#71717a'
+                                    }}
+                                >
+                                    Returns Policy
+                                </button>
+                            </div>
+
+                            <div style={{ padding: '16px 0', fontSize: '14px', color: '#52525b', lineHeight: '1.6' }}>
+                                {activeTab === 'details' && (
+                                    <div>
+                                        <p style={{ marginBottom: '10px' }}>{product.description}</p>
+                                        <p><strong>Fabric:</strong> {product.material || '100% Combed Heavy Cotton'}</p>
+                                        <p><strong>Fit:</strong> {product.fit || 'Oversized Silhouette'}</p>
+                                        {product.modelStats && <p><strong>Model Note:</strong> {product.modelStats}</p>}
                                     </div>
-                                ) : (
-                                    <>
-                                        <div style={{ marginBottom: '14px' }}>
-                                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '700', color: c.slate, marginBottom: '8px', textTransform: 'uppercase' }}>Your Rating *</label>
-                                            <Stars value={myRating} size={28} interactive onChange={setMyRating} />
-                                        </div>
-                                        <div style={{ marginBottom: '12px' }}>
-                                            <input value={myTitle} onChange={e => setMyTitle(e.target.value)}
-                                                placeholder="Review title (optional)"
-                                                style={inp} />
-                                        </div>
-                                        <div style={{ marginBottom: '14px' }}>
-                                            <textarea value={myBody} onChange={e => setMyBody(e.target.value)}
-                                                placeholder="Share your experience with this product..."
-                                                rows={4} style={{ ...inp, resize: 'none' }} />
-                                        </div>
-                                        {reviewError && <p style={{ color: '#ef4444', fontSize: '13px', margin: '0 0 12px', fontWeight: '600' }}>⚠ {reviewError}</p>}
-
-                                        <div style={{ marginBottom: '14px' }}>
-                                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: c.forest, fontWeight: '700', backgroundColor: '#f1f5f9', border: '1px solid #cbd5e1', padding: '10px 16px', borderRadius: '10px', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.backgroundColor = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}>
-                                                <Camera size={18} /> Upload Photos (Optional)
-                                                <input type="file" multiple accept="image/*" onChange={(e) => setMyImages([...myImages, ...Array.from(e.target.files)])} style={{ display: 'none' }} />
-                                            </label>
-                                            {myImages.length > 0 && (
-                                                <div style={{ display: 'flex', gap: '12px', marginTop: '12px', flexWrap: 'wrap' }}>
-                                                    {myImages.map((file, i) => (
-                                                        <div key={i} style={{ position: 'relative' }}>
-                                                            <img src={URL.createObjectURL(file)} alt="" style={{ width: '56px', height: '56px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                                                            <button onClick={() => setMyImages(myImages.filter((_, idx) => idx !== i))} style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>✕</button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <button onClick={handleSubmitReview} disabled={submitting} style={{ width: '100%', padding: '13px', backgroundColor: submitting ? '#94a3b8' : '#111', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: submitting ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', textTransform: 'uppercase' }}>
-                                            <Send size={15} /> {submitting ? 'Submitting…' : 'Submit Review'}
-                                        </button>
-                                    </>
+                                )}
+                                {activeTab === 'care' && (
+                                    <div>
+                                        <p>{product.careInstructions || '• Machine wash cold with similar dark colors.'}</p>
+                                        <p>• Do not iron directly on graphic prints.</p>
+                                        <p>• Line dry in shade to preserve fabric softness.</p>
+                                    </div>
+                                )}
+                                {activeTab === 'shipping' && (
+                                    <div>
+                                        <p>• We offer a <strong>7-Day Size Exchange</strong> guarantee from the date of delivery.</p>
+                                        <p>• Garments must have original tags intact, unworn, and unwashed.</p>
+                                        <p>• You can initiate a size exchange with one click right from your Orders dashboard.</p>
+                                    </div>
                                 )}
                             </div>
                         </div>
 
-                        {/* Review list */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '600px', overflowY: 'auto', paddingRight: '4px' }}>
-                            {reviews.length === 0 ? (
-                                <p style={{ color: c.slate, textAlign: 'center', padding: '40px 0', fontSize: '14px' }}>No reviews yet. Be the first!</p>
-                            ) : reviews.map(r => (
-                                <div key={r._id} style={{ backgroundColor: c.white, borderRadius: '8px', padding: '20px', border: '1px solid #e2e8f0' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                            <div style={{ width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#f1f5f9', color: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '900', fontSize: '16px', flexShrink: 0 }}>
-                                                {r.userAvatar || r.userName?.[0] || '?'}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontWeight: '700', fontSize: '14px', color: '#111' }}>{r.userName}</div>
-                                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(r.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
-                                            </div>
-                                        </div>
-                                        <Stars value={r.rating} size={14} />
-                                    </div>
-                                    {r.title && <div style={{ fontWeight: '700', color: '#111', fontSize: '14px', marginBottom: '6px' }}>{r.title}</div>}
-                                    <p style={{ margin: 0, color: '#475569', fontSize: '14px', lineHeight: '1.6' }}>{r.body}</p>
-                                    {r.images && r.images.length > 0 && (
-                                        <div style={{ display: 'flex', gap: '8px', marginTop: '12px', overflowX: 'auto' }}>
-                                            {r.images.map((imgUrl, i) => (
-                                                <img key={i} src={getImageUrl(imgUrl)} alt="Review" style={{ height: '72px', width: '72px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
                     </div>
                 </div>
 
-                {/* ── YOU MIGHT ALSO LIKE SECTION ── */}
-                {allProducts.length > 1 && (
-                    <div className="new-arrivals">
-                        <h2 style={{ textAlign: 'center' }}>You Might Also <strong>Like</strong></h2>
-                        <div className="vcard-shelf">
-                            {allProducts
-                                .filter(p => p._id !== product._id && (!product.category || p.category === product.category))
-                                .concat(allProducts.filter(p => p._id !== product._id && product.category && p.category !== product.category))
-                                .slice(0, 4)
-                                .map(p => {
-                                    const imgs = (p.images || []).filter(Boolean).length ? p.images : p.image ? [p.image] : [];
-                                    const q = cartItems.find(i => i._id === p._id)?.qty || 0;
-                                    const original = p.originalPrice || p.comparePrice || null;
-                                    const basePrice = p.weights?.[0]?.price || p.price || 0;
-                                    const discount = original && original > basePrice ? Math.round((1 - basePrice / original) * 100) : null;
-                                    return (
-                                        <div key={p._id} className="vcard">
-                                            <div className="vcard-img-wrap">
-                                                {imgs[0]
-                                                    ? <img src={imgs[0]} alt={p.name} className="vcard-img" onClick={() => navigate(`/product/${p.slug || p._id}`)} />
-                                                    : <div className="vcard-img img-placeholder">📦</div>
-                                                }
-                                                {imgs[1] && <img src={imgs[1]} alt={p.name} className="vcard-img-hover" onClick={() => navigate(`/product/${p.slug || p._id}`)} />}
-                                                {p.category && <span className="vcard-badge">{p.category}</span>}
-                                                {q === 0 && (
-                                                    <button className="vcard-quick" onClick={(e) => { e.stopPropagation(); addToCart(p); showToast(`${p.name} added!`); }}>+ Quick Add</button>
-                                                )}
-                                            </div>
-                                            <div className="vcard-body">
-                                                <button className="vcard-name" onClick={() => navigate(`/product/${p.slug || p._id}`)}>{p.name}</button>
-                                                <div className="vcard-price-row">
-                                                    <span className="vcard-price">{fmt(basePrice)}</span>
-                                                    {original && original > basePrice && (
-                                                        <span className="vcard-price-orig">{fmt(original)}</span>
-                                                    )}
-                                                    {discount && <span className="vcard-price-badge">{discount}% off</span>}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                {/* Customer Reviews Section */}
+                <div style={{ marginTop: '64px', borderTop: '1px solid #e4e4e7', paddingTop: '40px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                        <div>
+                            <h2 style={{ fontSize: '24px', fontWeight: '800', margin: 0 }}>Customer Reviews & Fit Experience</h2>
+                            <p style={{ margin: 0, fontSize: '14px', color: '#71717a' }}>Real feedback from verified buyers</p>
                         </div>
                     </div>
-                )}
+
+                    {/* Review Submission Form */}
+                    <div style={{ background: '#fafafa', padding: '24px', borderRadius: '12px', border: '1px solid #f4f4f5', marginBottom: '32px' }}>
+                        <h3 style={{ margin: '0 0 16px', fontSize: '16px', fontWeight: '700' }}>Write a Review & Fit Feedback</h3>
+                        <form onSubmit={handleReviewSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            <div style={{ display: 'flex', gap: '24px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <div>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', marginRight: '8px' }}>Your Rating:</span>
+                                    <Stars value={reviewForm.rating} interactive onChange={r => setReviewForm({ ...reviewForm, rating: r })} />
+                                </div>
+                                <div>
+                                    <span style={{ fontSize: '13px', fontWeight: '600', marginRight: '8px' }}>How does it fit?</span>
+                                    <select
+                                        value={reviewForm.fitFeedback}
+                                        onChange={e => setReviewForm({ ...reviewForm, fitFeedback: e.target.value })}
+                                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                                    >
+                                        <option value="Runs Small">Runs Small</option>
+                                        <option value="True to Size">True to Size</option>
+                                        <option value="Runs Large">Runs Large</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <input 
+                                        placeholder="Size Purchased (e.g. L)"
+                                        value={reviewForm.sizePurchased}
+                                        onChange={e => setReviewForm({ ...reviewForm, sizePurchased: e.target.value })}
+                                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '150px' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <input 
+                                placeholder="Review Headline (e.g. Great heavyweight fabric!)"
+                                value={reviewForm.title} onChange={e => setReviewForm({ ...reviewForm, title: e.target.value })}
+                                style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                            />
+
+                            <textarea 
+                                rows={3} required
+                                placeholder="Tell other shoppers how the fit, fabric feel, and drape turned out..."
+                                value={reviewForm.body} onChange={e => setReviewForm({ ...reviewForm, body: e.target.value })}
+                                style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '14px', resize: 'vertical' }}
+                            />
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569', cursor: 'pointer' }}>
+                                    <Camera size={16} /> Upload Fit Photos
+                                    <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={e => setReviewFiles(Array.from(e.target.files))} />
+                                </label>
+                                <button
+                                    type="submit" disabled={submittingReview}
+                                    style={{
+                                        padding: '8px 20px', background: '#09090b', color: '#fff',
+                                        border: 'none', borderRadius: '6px', fontWeight: '700', fontSize: '14px', cursor: 'pointer'
+                                    }}
+                                >
+                                    {submittingReview ? 'Submitting...' : 'Post Review'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {/* Review Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                        {reviews.length === 0 ? (
+                            <div style={{ color: '#94a3b8', fontSize: '14px' }}>Be the first to review this garment!</div>
+                        ) : (
+                            reviews.map(r => (
+                                <div key={r._id} style={{ padding: '18px', borderRadius: '10px', border: '1px solid #e4e4e7', background: '#ffffff' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                        <Stars value={r.rating} size={14} />
+                                        <span style={{ fontSize: '11px', fontWeight: '700', color: '#2563eb', background: '#eff6ff', padding: '2px 8px', borderRadius: '4px' }}>
+                                            {r.fitFeedback || 'True to Size'}
+                                        </span>
+                                    </div>
+                                    <div style={{ fontSize: '14px', fontWeight: '700', color: '#09090b', marginBottom: '4px' }}>
+                                        {r.title || 'Great Quality'}
+                                    </div>
+                                    <p style={{ fontSize: '13px', color: '#52525b', lineHeight: '1.5', margin: '0 0 10px' }}>
+                                        {r.body}
+                                    </p>
+                                    <div style={{ fontSize: '12px', color: '#a1a1aa' }}>
+                                        {r.userName} {r.sizePurchased ? `• Ordered Size ${r.sizePurchased}` : ''}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
             </div>
+
+            {/* Size Guide Modal */}
+            <SizeGuideModal 
+                isOpen={isSizeGuideOpen} 
+                onClose={() => setIsSizeGuideOpen(false)}
+                customChart={product.sizeGuide}
+                category={product.category}
+            />
         </div>
     );
-};
-
-export default ProductPage;
+}

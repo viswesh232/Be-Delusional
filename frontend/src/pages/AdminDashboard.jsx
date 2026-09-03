@@ -5,7 +5,8 @@ import API from '../api/axios';
 import {
     TrendingUp, ShoppingBag, Users, PackageOpen, 
     LogOut, UtensilsCrossed, CreditCard, Settings, 
-    Bike, Search, FileText, Activity, Package, MessageSquare, ArrowUpRight, Menu, X, Sun, Moon, Lock, MessageCircle, BarChart3, Mail
+    Bike, Search, FileText, Activity, Package, MessageSquare, ArrowUpRight, Menu, X, Sun, Moon, Lock, MessageCircle, BarChart3, Mail,
+    Shirt, RefreshCw
 } from 'lucide-react';
 
 const darkTheme = {
@@ -122,9 +123,10 @@ const AdminDashboard = () => {
     const maxChartRev = Math.max(...last7Days.map(d => d.revenue), 1000);
 
     const workspaceModules = [
-        { title: 'Live Orders',       icon: Package,         path: '/admin/orders',          color: '#f59e0b', desc: 'Active order queue' },
-        { title: 'Menu Manager',      icon: UtensilsCrossed, path: '/admin/edit-menu',       color: '#3b82f6', desc: 'Products & pricing' },
-        { title: 'Payments Ledger',   icon: CreditCard,      path: '/admin/payments',        color: '#10b981', desc: 'Transactions & refunds' },
+        { title: 'Live Orders',         icon: Package,         path: '/admin/orders',          color: '#f59e0b', desc: 'Active order queue' },
+        { title: 'Apparel Catalog',     icon: Shirt,           path: '/admin/edit-menu',       color: '#3b82f6', desc: 'Garments & size matrix' },
+        { title: 'Exchanges & Returns', icon: RefreshCw,       path: '/admin/returns',         color: '#6366f1', desc: 'Size replacements & desk' },
+        { title: 'Payments Ledger',     icon: CreditCard,      path: '/admin/payments',        color: '#10b981', desc: 'Transactions & refunds' },
         { title: 'Delivery Info',     icon: Bike,            path: '/admin/delivery',        color: '#ef4444', desc: 'Dispatch routes' },
         { title: 'Customer Search',   icon: Search,          path: '/admin/customer-search', color: '#8b5cf6', desc: 'User directory' },
         { title: 'Bill Generator',    icon: FileText,        path: '/admin/bills',           color: '#64748b', desc: 'Custom receipts' },

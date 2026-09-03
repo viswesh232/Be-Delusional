@@ -9,15 +9,33 @@ const getPrimaryImage = (product) => {
     return '';
 };
 
-const normalizeCartItem = (product) => {
-    const weight = product.weight || (product.weights?.length > 0 ? product.weights[0].weight : '');
-    const price = product.weight ? product.price : (product.weights?.length > 0 ? product.weights[0].price : product.price);
+export const normalizeCartItem = (product) => {
+    const size = product.selectedSize || product.size || (product.sizes?.length > 0 ? product.sizes[0] : 'M');
+    const color = product.selectedColor || product.color || (product.colors?.length > 0 ? product.colors[0].name : 'Standard');
+    const colorHex = product.selectedColorHex || (product.colors?.length > 0 ? product.colors[0].hex : '#000000');
+    
+    // Check variant override or discount price
+    let price = product.price;
+    if (product.discountPrice && product.discountPrice > 0) {
+        price = product.discountPrice;
+    }
+    if (Array.isArray(product.variants)) {
+        const matchingVariant = product.variants.find(v => v.size === size && (v.color === color || color === 'Standard'));
+        if (matchingVariant && matchingVariant.price) {
+            price = matchingVariant.price;
+        }
+    }
+
+    const cartId = `${product._id || product.product}_${size}_${color}`;
 
     return {
         ...product,
-        weight,
+        product: product.product || product._id,
+        size,
+        color,
+        colorHex,
         price,
-        cartId: weight ? `${product._id}-${weight}` : product._id,
+        cartId,
         image: getPrimaryImage(product),
         images: Array.isArray(product.images)
             ? product.images
@@ -27,20 +45,30 @@ const normalizeCartItem = (product) => {
 
 export const CartProvider = ({ children }) => {
     const [cartItems, setCartItems] = useState(() => {
-        const savedCart = localStorage.getItem('trueEatsCart');
+        const savedCart = localStorage.getItem('trueThreadsCart') || localStorage.getItem('trueEatsCart');
         if (savedCart) {
-            return JSON.parse(savedCart).map(normalizeCartItem);
+            try {
+                return JSON.parse(savedCart).map(normalizeCartItem);
+            } catch (e) {
+                return [];
+            }
         }
         return [];
     });
 
-    // Save cart to LocalStorage whenever it changes
     useEffect(() => {
-        localStorage.setItem('trueEatsCart', JSON.stringify(cartItems));
+        localStorage.setItem('trueThreadsCart', JSON.stringify(cartItems));
     }, [cartItems]);
 
-    const addToCart = (product, qtyToAdd = 1) => {
-        const normalizedProduct = normalizeCartItem(product);
+    const addToCart = (product, qtyToAdd = 1, options = {}) => {
+        const itemToNormalize = {
+            ...product,
+            selectedSize: options.size || product.selectedSize || product.size,
+            selectedColor: options.color || product.selectedColor || product.color,
+            selectedColorHex: options.colorHex || product.selectedColorHex || product.colorHex,
+        };
+        const normalizedProduct = normalizeCartItem(itemToNormalize);
+
         setCartItems(prev => {
             const exist = prev.find((x) => x.cartId === normalizedProduct.cartId);
             if (exist) {

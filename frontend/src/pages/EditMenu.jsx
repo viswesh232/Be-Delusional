@@ -1,513 +1,653 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import API from '../api/axios';
 import { useNavigate } from 'react-router-dom';
 import {
-    Trash2, Utensils, IndianRupee, Tag,
+    Trash2, IndianRupee, Tag,
     ToggleLeft, ToggleRight, Pencil, Check, X,
-    ArrowLeft, Plus, Upload, Link, ChevronLeft, ChevronRight, Image
+    ArrowLeft, Plus, Upload, Link, ChevronLeft, ChevronRight, Image, Shirt, Sparkles, Layers
 } from 'lucide-react';
 import { getImageUrl } from '../utils/helpers';
 
 const c = {
-    forest: '#1a4331', peach: '#fcd5ce', chocolate: '#4a2c2a',
-    white: '#ffffff', bg: '#f4f7fe', slate: '#64748b', light: '#f1f5f9',
-    purple: '#4318FF',
+    dark: '#09090b',
+    lightBg: '#f8fafc',
+    border: '#e2e8f0',
+    primary: '#09090b',
+    accent: '#2563eb',
+    muted: '#64748b',
+    cardBg: '#ffffff'
 };
 
 const inp = {
-    padding: '10px 14px', borderRadius: '10px', border: '1px solid #e0e5f2',
-    backgroundColor: '#f8fafc', fontSize: '14px', outline: 'none',
+    padding: '10px 14px', borderRadius: '8px', border: '1px solid #e2e8f0',
+    backgroundColor: '#ffffff', fontSize: '14px', outline: 'none',
     width: '100%', boxSizing: 'border-box', fontFamily: 'inherit',
+    color: '#09090b'
 };
 
-// ── Image builder — used in both Add and Edit forms ──────────────────────────
-const useImageBuilder = (initialImages = []) => {
-    const [urlRows, setUrlRows] = useState(
-        initialImages.length > 0 ? initialImages : ['']
-    );
-    const [fileRows, setFileRows] = useState([]);
+const DEFAULT_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
+const APPAREL_CATEGORIES = ['T-Shirts', 'Shirts', 'Hoodies', 'Pants', 'Jeans', 'Jackets', 'Accessories'];
 
-    const addUrl    = ()        => setUrlRows(r => [...r, '']);
-    const removeUrl = (i)       => setUrlRows(r => r.filter((_, idx) => idx !== i));
-    const updateUrl = (i, val)  => setUrlRows(r => r.map((v, idx) => idx === i ? val : v));
-    const addFile   = (files)   => setFileRows(r => [...r, ...Array.from(files)]);
-    const removeFile= (i)       => setFileRows(r => r.filter((_, idx) => idx !== i));
-
-    const buildFormData = (fields) => {
-        const fd = new FormData();
-        Object.entries(fields).forEach(([k, v]) => fd.append(k, v));
-        urlRows.filter(u => u.trim()).forEach(u => fd.append('urlImages', u.trim()));
-        fileRows.forEach(f => fd.append('images', f));
-        return fd;
-    };
-
-    const resetImages = () => { setUrlRows(['']); setFileRows([]); };
-    return { urlRows, fileRows, addUrl, removeUrl, updateUrl, addFile, removeFile, buildFormData, resetImages };
-};
-
-// ── Small image carousel for product cards ───────────────────────────────────
-const ImageCarousel = ({ images = [], unavailable }) => {
-    const [idx, setIdx] = useState(0);
-    const list = images.length > 0 ? images : [];
-
-    if (list.length === 0) return (
-        <div style={{ height: '190px', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Image size={40} color="#cbd5e1" />
-        </div>
-    );
-
-    return (
-        <div style={{ height: '190px', position: 'relative', overflow: 'hidden', backgroundColor: '#000' }}>
-            <img
-                src={getImageUrl(list[idx])}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover', transition: '0.2s' }}
-                onError={e => { e.target.src = 'https://placehold.co/400x200?text=No+Image'; }}
-            />
-            {unavailable && (
-                <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ backgroundColor: '#ef4444', color: '#fff', fontWeight: '900', fontSize: '13px', padding: '6px 16px', borderRadius: '20px' }}>UNAVAILABLE</span>
-                </div>
-            )}
-            {list.length > 1 && (
-                <>
-                    <button onClick={() => setIdx(i => (i - 1 + list.length) % list.length)}
-                        style={{ position: 'absolute', left: '6px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'rgba(0,0,0,0.45)', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ChevronLeft size={16} />
-                    </button>
-                    <button onClick={() => setIdx(i => (i + 1) % list.length)}
-                        style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'rgba(0,0,0,0.45)', color: '#fff', borderRadius: '50%', width: '28px', height: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <ChevronRight size={16} />
-                    </button>
-                    <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '4px' }}>
-                        {list.map((_, i) => (
-                            <div key={i} onClick={() => setIdx(i)} style={{ width: i === idx ? '16px' : '6px', height: '6px', borderRadius: '3px', backgroundColor: i === idx ? '#fff' : 'rgba(255,255,255,0.5)', cursor: 'pointer', transition: '0.2s' }} />
-                        ))}
-                    </div>
-                </>
-            )}
-            <div style={{ position: 'absolute', bottom: '10px', left: '10px', backgroundColor: 'rgba(255,255,255,0.92)', padding: '4px 8px', borderRadius: '6px', fontSize: '10px', fontWeight: '700', color: '#64748b' }}>
-                {idx + 1}/{list.length}
-            </div>
-        </div>
-    );
-};
-
-// ── Image input section (reused in both Add and Edit) ────────────────────────
-const ImageInputSection = ({ urlRows, fileRows, addUrl, removeUrl, updateUrl, addFile, removeFile }) => {
-    const fileRef = useRef();
-
-    return (
-        <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '16px', border: '1px solid #e0e5f2' }}>
-            <p style={{ margin: '0 0 12px', fontSize: '13px', fontWeight: '700', color: c.slate, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Image size={14} /> Images (URL or upload — both optional, add as many as you want)
-            </p>
-
-            {urlRows.map((url, i) => (
-                <div key={i} style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', flex: 1, border: '1px solid #e0e5f2', borderRadius: '10px', backgroundColor: c.white, overflow: 'hidden' }}>
-                        <div style={{ padding: '0 10px', color: c.slate, flexShrink: 0 }}><Link size={14} /></div>
-                        <input
-                            value={url}
-                            onChange={e => updateUrl(i, e.target.value)}
-                            placeholder={`Image URL ${i + 1} (optional)`}
-                            style={{ ...inp, border: 'none', backgroundColor: 'transparent', padding: '10px 10px 10px 0' }}
-                        />
-                        {url && (
-                            <img src={url} alt="" style={{ width: '36px', height: '36px', objectFit: 'cover', flexShrink: 0, margin: '4px' }}
-                                onError={e => { e.target.style.display = 'none'; }} />
-                        )}
-                    </div>
-                    <button type="button" onClick={() => removeUrl(i)}
-                        style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '8px', width: '34px', height: '34px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <X size={14} />
-                    </button>
-                </div>
-            ))}
-
-            <button type="button" onClick={addUrl}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1px dashed #cbd5e1', background: 'none', color: c.slate, borderRadius: '8px', padding: '7px 14px', cursor: 'pointer', fontSize: '13px', marginBottom: '12px' }}>
-                <Plus size={13} /> Add another URL
-            </button>
-
-            <div style={{ borderTop: '1px dashed #e0e5f2', paddingTop: '12px' }}>
-                <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: 'none' }}
-                    onChange={e => { addFile(e.target.files); e.target.value = ''; }} />
-                <button type="button" onClick={() => fileRef.current.click()}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: c.white, border: '1px solid #e0e5f2', borderRadius: '10px', padding: '9px 16px', cursor: 'pointer', color: c.forest, fontWeight: '600', fontSize: '13px' }}>
-                    <Upload size={14} /> Upload from device
-                </button>
-
-                {fileRows.length > 0 && (
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
-                        {fileRows.map((file, i) => (
-                            <div key={i} style={{ position: 'relative' }}>
-                                <img src={URL.createObjectURL(file)} alt=""
-                                    style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e0e5f2' }} />
-                                <button type="button" onClick={() => removeFile(i)}
-                                    style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px' }}>
-                                    ✕
-                                </button>
-                                <div style={{ fontSize: '10px', color: c.slate, textAlign: 'center', marginTop: '2px', maxWidth: '60px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ────────────────────────────────────────────────────────────────────────────
-const EditMenu = () => {
+export default function EditMenu() {
     const navigate = useNavigate();
-    const [products, setProducts]   = useState([]);
-    const [loading, setLoading]     = useState(true);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
-    const [toast, setToast]         = useState('');
+    const [activeTab, setActiveTab] = useState('All');
 
-    const [addFields, setAddFields] = useState({ name: '', category: '', description: '', ingredients: '', shelfLife: '', instructions: '' });
-    const [addWeights, setAddWeights] = useState([{ weight: '250gm', price: '' }]);
-    const addImages = useImageBuilder([]);
+    // Form state
+    const [formData, setFormData] = useState({
+        name: '',
+        brand: 'True Threads',
+        price: '',
+        discountPrice: '',
+        category: 'T-Shirts',
+        subCategory: 'Oversized',
+        gender: 'Unisex',
+        description: '',
+        material: '100% Combed Cotton, 240 GSM',
+        fit: 'Oversized Fit',
+        careInstructions: 'Machine wash cold. Do not tumble dry.',
+        modelStats: '',
+        isAvailable: true,
+        isNewDrop: true,
+        isBestseller: false,
+        selectedSizes: ['S', 'M', 'L', 'XL'],
+        colorName: 'Black',
+        colorHex: '#09090b',
+        stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+    });
 
-    const [editFields, setEditFields] = useState({ name: '', category: '', description: '', ingredients: '', shelfLife: '', instructions: '' });
-    const [editWeights, setEditWeights] = useState([]);
-    const [editImages, setEditImages] = useState({ urlRows: [''], fileRows: [] });
-
-    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 2500); };
+    const [urlImages, setUrlImages] = useState(['']);
+    const [fileImages, setFileImages] = useState([]);
 
     const fetchProducts = async () => {
         try {
-            const { data } = await API.get('/products?all=true');
-            setProducts(data);
-        } catch (err) { console.error(err); }
-        setLoading(false);
+            setLoading(true);
+            const res = await API.get('/products?all=true');
+            setProducts(res.data);
+        } catch (err) {
+            console.error('Failed to fetch products', err);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
         fetchProducts();
     }, []);
 
+    const handleSizeToggle = (size) => {
+        setFormData(prev => {
+            const exists = prev.selectedSizes.includes(size);
+            const updated = exists 
+                ? prev.selectedSizes.filter(s => s !== size)
+                : [...prev.selectedSizes, size];
+            
+            const newStock = { ...prev.stockPerSize };
+            if (!exists && !newStock[size]) {
+                newStock[size] = 20;
+            }
+            return { ...prev, selectedSizes: updated, stockPerSize: newStock };
+        });
+    };
+
+    const handleStockChange = (size, val) => {
+        setFormData(prev => ({
+            ...prev,
+            stockPerSize: { ...prev.stockPerSize, [size]: Number(val) || 0 }
+        }));
+    };
+
+    const resetForm = () => {
+        setFormData({
+            name: '',
+            brand: 'True Threads',
+            price: '',
+            discountPrice: '',
+            category: 'T-Shirts',
+            subCategory: 'Oversized',
+            gender: 'Unisex',
+            description: '',
+            material: '100% Combed Cotton, 240 GSM',
+            fit: 'Oversized Fit',
+            careInstructions: 'Machine wash cold. Do not tumble dry.',
+            modelStats: '',
+            isAvailable: true,
+            isNewDrop: true,
+            isBestseller: false,
+            selectedSizes: ['S', 'M', 'L', 'XL'],
+            colorName: 'Black',
+            colorHex: '#09090b',
+            stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+        });
+        setUrlImages(['']);
+        setFileImages([]);
+        setEditingId(null);
+    };
+
+    const handleEditClick = (p) => {
+        setEditingId(p._id);
+        const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL'];
+        const stockMap = {};
+        if (Array.isArray(p.variants)) {
+            p.variants.forEach(v => {
+                stockMap[v.size] = v.stock;
+            });
+        } else {
+            sizes.forEach(s => stockMap[s] = 20);
+        }
+
+        setFormData({
+            name: p.name || '',
+            brand: p.brand || 'True Threads',
+            price: p.price || '',
+            discountPrice: p.discountPrice || '',
+            category: p.category || 'T-Shirts',
+            subCategory: p.subCategory || '',
+            gender: p.gender || 'Unisex',
+            description: p.description || '',
+            material: p.material || '100% Cotton',
+            fit: p.fit || 'Regular Fit',
+            careInstructions: p.careInstructions || '',
+            modelStats: p.modelStats || '',
+            isAvailable: p.isAvailable ?? true,
+            isNewDrop: p.isNewDrop ?? false,
+            isBestseller: p.isBestseller ?? false,
+            selectedSizes: sizes,
+            colorName: p.colors?.[0]?.name || 'Black',
+            colorHex: p.colors?.[0]?.hex || '#09090b',
+            stockPerSize: stockMap
+        });
+
+        setUrlImages(p.images && p.images.length > 0 ? p.images : ['']);
+        setFileImages([]);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const fd = addImages.buildFormData({
-                name:        addFields.name,
-                price:       addWeights[0]?.price || 0,
-                category:    addFields.category,
-                description: addFields.description,
-                ingredients: addFields.ingredients,
-                shelfLife:   addFields.shelfLife,
-                instructions:addFields.instructions,
-                weights:     JSON.stringify(addWeights),
-                isAvailable: 'true',
-            });
-            await API.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setAddFields({ name: '', category: '', description: '', ingredients: '', shelfLife: '', instructions: '' });
-            setAddWeights([{ weight: '250gm', price: '' }]);
-            addImages.resetImages();
+            const variants = formData.selectedSizes.map(size => ({
+                sku: `${formData.name.substring(0, 3).toUpperCase()}-${size}`,
+                size,
+                color: formData.colorName,
+                colorHex: formData.colorHex,
+                stock: formData.stockPerSize[size] ?? 20,
+                price: Number(formData.price)
+            }));
+
+            const colors = [{ name: formData.colorName, hex: formData.colorHex }];
+
+            const fd = new FormData();
+            fd.append('name', formData.name);
+            fd.append('brand', formData.brand);
+            fd.append('price', formData.price);
+            fd.append('discountPrice', formData.discountPrice || '0');
+            fd.append('category', formData.category);
+            fd.append('subCategory', formData.subCategory);
+            fd.append('gender', formData.gender);
+            fd.append('description', formData.description);
+            fd.append('material', formData.material);
+            fd.append('fit', formData.fit);
+            fd.append('careInstructions', formData.careInstructions);
+            fd.append('modelStats', formData.modelStats);
+            fd.append('isAvailable', formData.isAvailable);
+            fd.append('isNewDrop', formData.isNewDrop);
+            fd.append('isBestseller', formData.isBestseller);
+
+            fd.append('sizes', JSON.stringify(formData.selectedSizes));
+            fd.append('colors', JSON.stringify(colors));
+            fd.append('variants', JSON.stringify(variants));
+
+            urlImages.filter(u => u && u.trim()).forEach(u => fd.append('urlImages', u.trim()));
+            fileImages.forEach(f => fd.append('images', f));
+
+            if (editingId) {
+                await API.put(`/products/${editingId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            } else {
+                await API.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+            }
+
+            resetForm();
             fetchProducts();
-            showToast('Dish published successfully');
         } catch (err) {
-            alert('Error: ' + (err.response?.data?.message || err.message));
+            console.error('Error saving product', err);
+            alert(err.response?.data?.message || 'Error saving apparel product');
         }
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this dish from the live menu?')) return;
+        if (!window.confirm('Delete this product from catalog?')) return;
         try {
             await API.delete(`/products/${id}`);
             fetchProducts();
-            showToast('Dish removed');
-        } catch { alert('Error deleting dish'); }
-    };
-
-    const handleToggleAvailable = async (p) => {
-        try {
-            await API.put(`/products/${p._id}`, { isAvailable: !p.isAvailable });
-            setProducts(prev => prev.map(x => x._id === p._id ? { ...x, isAvailable: !x.isAvailable } : x));
-            showToast(`${p.name} marked ${!p.isAvailable ? 'Available' : 'Sold Out'}`);
-        } catch { alert('Failed to update availability'); }
-    };
-
-    const handleToggleHidden = async (p) => {
-        try {
-            await API.put(`/products/${p._id}`, { isHidden: !p.isHidden });
-            setProducts(prev => prev.map(x => x._id === p._id ? { ...x, isHidden: !x.isHidden } : x));
-            showToast(`${p.name} is now ${!p.isHidden ? 'hidden from menu' : 'visible on menu'}`);
-        } catch { alert('Failed to update visibility'); }
-    };
-
-    const startEdit = (p) => {
-        setEditingId(p._id);
-        setEditFields({ name: p.name, category: p.category, description: p.description, ingredients: p.ingredients || '', shelfLife: p.shelfLife || '', instructions: p.instructions || '' });
-        setEditWeights(p.weights?.length ? p.weights : [{ weight: '250gm', price: p.price || '' }]);
-        const existingUrls = (p.images || []).filter(img => img.startsWith('http'));
-        setEditImages({
-            urlRows: existingUrls.length > 0 ? existingUrls : [''],
-            fileRows: [],
-        });
-    };
-
-    const saveEdit = async (id) => {
-        try {
-            const fd = new FormData();
-            fd.append('name',        editFields.name);
-            fd.append('price',       editWeights[0]?.price || 0);
-            fd.append('category',    editFields.category);
-            fd.append('description', editFields.description);
-            fd.append('ingredients', editFields.ingredients);
-            fd.append('shelfLife',   editFields.shelfLife);
-            fd.append('instructions',editFields.instructions);
-            fd.append('weights',     JSON.stringify(editWeights));
-            fd.append('isAvailable', 'true');
-
-            editImages.urlRows.filter(u => u.trim()).forEach(u => fd.append('urlImages', u.trim()));
-            editImages.fileRows.forEach(f => fd.append('images', f));
-
-            await API.put(`/products/${id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-            setEditingId(null);
-            fetchProducts();
-            showToast('Changes saved');
         } catch (err) {
-            alert('Failed to save: ' + (err.response?.data?.message || err.message));
+            alert('Failed to delete product');
         }
     };
 
+    const toggleAvailability = async (product) => {
+        try {
+            await API.put(`/products/${product._id}`, { isAvailable: !product.isAvailable }, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            fetchProducts();
+        } catch (err) {
+            alert('Failed to toggle availability');
+        }
+    };
+
+    const filteredProducts = activeTab === 'All' 
+        ? products 
+        : products.filter(p => p.gender === activeTab || p.category === activeTab);
+
     return (
-        <div style={{ padding: '40px 50px', fontFamily: "'Inter', sans-serif", backgroundColor: c.bg, minHeight: '100vh', color: '#1b2559' }}>
-            {toast && (
-                <div style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', backgroundColor: c.forest, color: '#fff', padding: '14px 28px', borderRadius: '50px', fontWeight: 'bold', zIndex: 999, fontSize: '14px', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' }}>
-                    ✓ {toast}
+        <div style={{ backgroundColor: c.lightBg, minHeight: '100vh', padding: '30px 20px', fontFamily: 'inherit' }}>
+            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px',
+                                padding: '8px 14px', cursor: 'pointer', fontWeight: '600', fontSize: '14px'
+                            }}
+                        >
+                            <ArrowLeft size={16} /> Admin Dashboard
+                        </button>
+                        <div>
+                            <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '800', color: c.dark }}>
+                                Apparel Catalog & Inventory Matrix
+                            </h1>
+                            <p style={{ margin: 0, fontSize: '14px', color: c.muted }}>
+                                Manage clothing items, size variants, stock counts, and fabric specs
+                            </p>
+                        </div>
+                    </div>
                 </div>
-            )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '36px' }}>
-                <div onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer', padding: '10px', backgroundColor: c.white, borderRadius: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
-                    <ArrowLeft size={20} color={c.forest} />
-                </div>
-                <div style={{ backgroundColor: c.purple, padding: '12px', borderRadius: '14px' }}>
-                    <Utensils color="#fff" size={26} />
-                </div>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: '26px', fontWeight: '900' }}>True Eats Menu</h1>
-                    <p style={{ margin: 0, fontSize: '13px', color: c.slate }}>{products.length} items · Toggle availability, edit details, or add new items</p>
-                </div>
-            </div>
+                {/* Form Card */}
+                <div style={{
+                    background: '#ffffff', borderRadius: '16px', padding: '28px',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.03)', border: '1px solid #e2e8f0',
+                    marginBottom: '32px'
+                }}>
+                    <h2 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '20px', color: c.dark, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Shirt size={20} color={c.accent} />
+                        {editingId ? 'Edit Apparel Product' : 'Add New Clothing Item'}
+                    </h2>
 
-            <div style={{ backgroundColor: c.white, padding: '32px', borderRadius: '24px', boxShadow: '0 8px 24px rgba(0,0,0,0.04)', marginBottom: '40px', border: '1px solid #e0e5f2' }}>
-                <h3 style={{ margin: '0 0 20px', display: 'flex', alignItems: 'center', gap: '8px', color: c.forest, fontSize: '16px', fontWeight: '800' }}>
-                    <Plus size={18} /> Add New Item
-                </h3>
-                <form onSubmit={handleSubmit}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px', marginBottom: '14px' }}>
-                        <input style={inp} placeholder="Dish Name" value={addFields.name} onChange={e => setAddFields({ ...addFields, name: e.target.value })} required />
-                        <input style={inp} placeholder="Category (e.g. Starters)" value={addFields.category} onChange={e => setAddFields({ ...addFields, category: e.target.value })} required />
-                        <textarea style={{ ...inp, height: '44px', resize: 'none' }} placeholder="Description..." value={addFields.description} onChange={e => setAddFields({ ...addFields, description: e.target.value })} required />
-                        <input style={inp} placeholder="Ingredients" value={addFields.ingredients} onChange={e => setAddFields({ ...addFields, ingredients: e.target.value })} />
-                        <input style={inp} placeholder="Shelf Life (e.g. 2 Months)" value={addFields.shelfLife} onChange={e => setAddFields({ ...addFields, shelfLife: e.target.value })} />
-                        <textarea style={{ ...inp, height: '44px', resize: 'none' }} placeholder="Instructions..." value={addFields.instructions} onChange={e => setAddFields({ ...addFields, instructions: e.target.value })} />
-                        
-                        <div style={{ gridColumn: '1 / -1', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e0e5f2' }}>
-                            <label style={{ fontSize: '13px', fontWeight: '700', color: c.slate, display: 'block', marginBottom: '8px' }}>Weights & Pricing</label>
-                            {addWeights.map((w, i) => (
-                                <div key={i} style={{ display: 'flex', gap: '10px', marginBottom: '8px' }}>
-                                    <input style={{ ...inp, flex: 1 }} placeholder="Weight (e.g. 250gm)" value={w.weight} onChange={e => { const nw = [...addWeights]; nw[i].weight = e.target.value; setAddWeights(nw); }} required />
-                                    <input style={{ ...inp, flex: 1 }} type="number" placeholder="Price (₹)" value={w.price} onChange={e => { const nw = [...addWeights]; nw[i].price = e.target.value; setAddWeights(nw); }} required />
-                                    {addWeights.length > 1 && (
-                                        <button type="button" onClick={() => setAddWeights(addWeights.filter((_, idx) => idx !== i))} style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '8px', padding: '0 12px', cursor: 'pointer' }}><X size={14}/></button>
+                    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Product Title *</label>
+                                <input 
+                                    style={inp} required placeholder="e.g. Heavyweight Oversized Tee"
+                                    value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Brand</label>
+                                <input 
+                                    style={inp} placeholder="True Threads"
+                                    value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Gender Collection</label>
+                                <select 
+                                    style={inp} value={formData.gender}
+                                    onChange={e => setFormData({ ...formData, gender: e.target.value })}
+                                >
+                                    <option value="Men">Men</option>
+                                    <option value="Women">Women</option>
+                                    <option value="Unisex">Unisex</option>
+                                    <option value="Kids">Kids</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Category *</label>
+                                <select 
+                                    style={inp} value={formData.category}
+                                    onChange={e => setFormData({ ...formData, category: e.target.value })}
+                                >
+                                    {APPAREL_CATEGORIES.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Regular Price (₹) *</label>
+                                <input 
+                                    type="number" style={inp} required placeholder="1299"
+                                    value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Discounted / Sale Price (₹)</label>
+                                <input 
+                                    type="number" style={inp} placeholder="999 (Optional)"
+                                    value={formData.discountPrice} onChange={e => setFormData({ ...formData, discountPrice: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Sub-Category / Style</label>
+                                <input 
+                                    style={inp} placeholder="e.g. Acid Wash, Cargo, Boxy"
+                                    value={formData.subCategory} onChange={e => setFormData({ ...formData, subCategory: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Primary Color Name & Hex</label>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <input 
+                                        style={{ ...inp, flex: 2 }} placeholder="Onyx Black"
+                                        value={formData.colorName} onChange={e => setFormData({ ...formData, colorName: e.target.value })}
+                                    />
+                                    <input 
+                                        type="color" style={{ width: '46px', height: '42px', padding: 0, border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                                        value={formData.colorHex} onChange={e => setFormData({ ...formData, colorHex: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sizes & Variant Stock Matrix */}
+                        <div style={{ padding: '16px', borderRadius: '10px', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                            <label style={{ display: 'block', fontSize: '14px', fontWeight: '700', marginBottom: '10px', color: c.dark }}>
+                                Size Selection & Variant Stock Matrix
+                            </label>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                                {DEFAULT_SIZES.map(s => {
+                                    const isSel = formData.selectedSizes.includes(s);
+                                    return (
+                                        <button
+                                            key={s} type="button" onClick={() => handleSizeToggle(s)}
+                                            style={{
+                                                padding: '6px 14px', borderRadius: '6px', fontSize: '13px', fontWeight: '700',
+                                                border: isSel ? '2px solid #09090b' : '1px solid #cbd5e1',
+                                                background: isSel ? '#09090b' : '#ffffff',
+                                                color: isSel ? '#ffffff' : '#475569',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            {s} {isSel ? '✓' : '+'}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Stock inputs per selected size */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+                                {formData.selectedSizes.map(s => (
+                                    <div key={s} style={{ background: '#ffffff', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                        <span style={{ fontSize: '12px', fontWeight: '700', color: c.muted, textTransform: 'uppercase' }}>Size {s} Stock</span>
+                                        <input 
+                                            type="number" min="0" style={{ ...inp, marginTop: '4px', padding: '6px 10px' }}
+                                            value={formData.stockPerSize[s] ?? 0}
+                                            onChange={e => handleStockChange(s, e.target.value)}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Garment Details */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Material / Fabric</label>
+                                <input 
+                                    style={inp} placeholder="100% Combed Cotton, 240 GSM"
+                                    value={formData.material} onChange={e => setFormData({ ...formData, material: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Fit Description</label>
+                                <input 
+                                    style={inp} placeholder="Oversized Boxy Silhouette"
+                                    value={formData.fit} onChange={e => setFormData({ ...formData, fit: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Model Stats</label>
+                                <input 
+                                    style={inp} placeholder="Model is 6'1 wearing size L"
+                                    value={formData.modelStats} onChange={e => setFormData({ ...formData, modelStats: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Description *</label>
+                            <textarea 
+                                rows={3} style={{ ...inp, resize: 'vertical' }} required
+                                placeholder="Describe the silhouette, styling tips, feel, and details..."
+                                value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })}
+                            />
+                        </div>
+
+                        {/* Image URLs & Files */}
+                        <div>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>
+                                Product Photos (Image URLs or Upload)
+                            </label>
+                            {urlImages.map((url, idx) => (
+                                <div key={idx} style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                                    <input 
+                                        style={inp} placeholder="https://images.unsplash.com/photo-..."
+                                        value={url} onChange={e => {
+                                            const updated = [...urlImages];
+                                            updated[idx] = e.target.value;
+                                            setUrlImages(updated);
+                                        }}
+                                    />
+                                    {urlImages.length > 1 && (
+                                        <button 
+                                            type="button" onClick={() => setUrlImages(urlImages.filter((_, i) => i !== idx))}
+                                            style={{ background: '#fee2e2', border: 'none', borderRadius: '8px', padding: '0 12px', cursor: 'pointer' }}
+                                        >
+                                            <X size={16} color="#ef4444" />
+                                        </button>
                                     )}
                                 </div>
                             ))}
-                            <button type="button" onClick={() => setAddWeights([...addWeights, { weight: '', price: '' }])} style={{ background: 'none', border: '1px dashed #cbd5e1', color: c.slate, padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}>+ Add another weight</button>
-                        </div>
-                    </div>
+                            <button
+                                type="button" onClick={() => setUrlImages([...urlImages, ''])}
+                                style={{ background: 'none', border: '1px dashed #cbd5e1', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                            >
+                                + Add Image URL
+                            </button>
 
-                    <ImageInputSection
-                        urlRows={addImages.urlRows}
-                        fileRows={addImages.fileRows}
-                        addUrl={addImages.addUrl}
-                        removeUrl={addImages.removeUrl}
-                        updateUrl={addImages.updateUrl}
-                        addFile={addImages.addFile}
-                        removeFile={addImages.removeFile}
-                    />
-
-                    <button type="submit" style={{ width: '100%', marginTop: '16px', padding: '16px', backgroundColor: c.purple, color: '#fff', border: 'none', borderRadius: '14px', fontSize: '15px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 8px 20px rgba(67,24,255,0.2)' }}>
-                        Publish Item
-                    </button>
-                </form>
-            </div>
-
-            {loading ? (
-                <p style={{ textAlign: 'center', color: c.slate, padding: '40px' }}>Loading menu...</p>
-            ) : products.length === 0 ? (
-                <p style={{ textAlign: 'center', color: c.slate, padding: '40px' }}>No items yet. Add your first dish above.</p>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '28px' }}>
-                    {products.map(p => {
-                        const isEditing = editingId === p._id;
-                        const images = p.images || (p.image ? [p.image] : []);
-
-                        return (
-                            <div key={p._id} style={{
-                                backgroundColor: c.white, borderRadius: '20px', overflow: 'hidden',
-                                boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
-                                border: `2px solid ${p.isHidden ? '#fef3c7' : !p.isAvailable ? '#fecdd3' : '#eef2f6'}`,
-                                opacity: p.isHidden ? 0.7 : p.isAvailable ? 1 : 0.85, transition: '0.2s'
-                            }}>
-
-                                {!isEditing && (
-                                    <div style={{ position: 'relative' }}>
-                                        <ImageCarousel images={images} unavailable={!p.isAvailable} />
-                                        <div style={{ position: 'absolute', bottom: '10px', left: '10px', backgroundColor: 'rgba(255,255,255,0.92)', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: '700', color: c.purple, display: 'flex', alignItems: 'center', gap: '4px', zIndex: 2 }}>
-                                            <Tag size={10} /> {p.category}
-                                        </div>
-                                        <button onClick={() => handleDelete(p._id)} style={{ position: 'absolute', top: '10px', right: '10px', backgroundColor: '#fff', border: 'none', borderRadius: '10px', width: '34px', height: '34px', cursor: 'pointer', color: '#ff5c5c', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.12)', zIndex: 2 }}>
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
+                            <div style={{ marginTop: '12px' }}>
+                                <label style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                                    background: '#f1f5f9', padding: '8px 14px', borderRadius: '8px',
+                                    cursor: 'pointer', fontSize: '13px', fontWeight: '600'
+                                }}>
+                                    <Upload size={16} /> Upload Photos from Computer
+                                    <input 
+                                        type="file" multiple accept="image/*" style={{ display: 'none' }}
+                                        onChange={e => setFileImages(Array.from(e.target.files))}
+                                    />
+                                </label>
+                                {fileImages.length > 0 && (
+                                    <span style={{ marginLeft: '12px', fontSize: '13px', color: '#16a34a', fontWeight: '600' }}>
+                                        {fileImages.length} photo(s) selected
+                                    </span>
                                 )}
+                            </div>
+                        </div>
 
-                                <div style={{ padding: '20px' }}>
-                                    {isEditing ? (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            <input value={editFields.name} onChange={e => setEditFields({ ...editFields, name: e.target.value })} style={inp} placeholder="Name" />
-                                            <input value={editFields.category} onChange={e => setEditFields({ ...editFields, category: e.target.value })} style={inp} placeholder="Category" />
-                                            <textarea value={editFields.description} onChange={e => setEditFields({ ...editFields, description: e.target.value })} style={{ ...inp, height: '60px', resize: 'none' }} placeholder="Description" />
-                                            <input value={editFields.ingredients} onChange={e => setEditFields({ ...editFields, ingredients: e.target.value })} style={inp} placeholder="Ingredients" />
-                                            <input value={editFields.shelfLife} onChange={e => setEditFields({ ...editFields, shelfLife: e.target.value })} style={inp} placeholder="Shelf Life" />
-                                            <textarea value={editFields.instructions} onChange={e => setEditFields({ ...editFields, instructions: e.target.value })} style={{ ...inp, height: '40px', resize: 'none' }} placeholder="Instructions" />
-                                            
-                                            <div style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '10px', border: '1px solid #e0e5f2' }}>
-                                                <label style={{ fontSize: '12px', fontWeight: '700', color: c.slate, display: 'block', marginBottom: '6px' }}>Weights & Pricing</label>
-                                                {editWeights.map((w, i) => (
-                                                    <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '6px' }}>
-                                                        <input style={{ ...inp, flex: 1, padding: '6px 10px' }} placeholder="Weight" value={w.weight} onChange={e => { const nw = [...editWeights]; nw[i].weight = e.target.value; setEditWeights(nw); }} required />
-                                                        <input style={{ ...inp, flex: 1, padding: '6px 10px' }} type="number" placeholder="Price ₹" value={w.price} onChange={e => { const nw = [...editWeights]; nw[i].price = e.target.value; setEditWeights(nw); }} required />
-                                                        {editWeights.length > 1 && (
-                                                            <button type="button" onClick={() => setEditWeights(editWeights.filter((_, idx) => idx !== i))} style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '6px', padding: '0 8px', cursor: 'pointer' }}><X size={12}/></button>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                                <button type="button" onClick={() => setEditWeights([...editWeights, { weight: '', price: '' }])} style={{ background: 'none', border: '1px dashed #cbd5e1', color: c.slate, padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px' }}>+ Add Weight</button>
-                                            </div>
+                        {/* Merchandising Badges */}
+                        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', paddingTop: '8px' }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                                <input 
+                                    type="checkbox" checked={formData.isNewDrop}
+                                    onChange={e => setFormData({ ...formData, isNewDrop: e.target.checked })}
+                                />
+                                Mark as "New Drop"
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                                <input 
+                                    type="checkbox" checked={formData.isBestseller}
+                                    onChange={e => setFormData({ ...formData, isBestseller: e.target.checked })}
+                                />
+                                Mark as "Bestseller"
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>
+                                <input 
+                                    type="checkbox" checked={formData.isAvailable}
+                                    onChange={e => setFormData({ ...formData, isAvailable: e.target.checked })}
+                                />
+                                Available for Purchase
+                            </label>
+                        </div>
 
-                                            <div style={{ backgroundColor: '#f8fafc', borderRadius: '12px', padding: '14px', border: '1px solid #e0e5f2' }}>
-                                                <p style={{ margin: '0 0 10px', fontSize: '12px', fontWeight: '700', color: c.slate }}>IMAGES (edit or replace)</p>
-                                                {editImages.urlRows.map((url, i) => (
-                                                    <div key={i} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-                                                        <div style={{ display: 'flex', alignItems: 'center', flex: 1, border: '1px solid #e0e5f2', borderRadius: '8px', backgroundColor: c.white, overflow: 'hidden' }}>
-                                                            <div style={{ padding: '0 8px', color: c.slate }}><Link size={13} /></div>
-                                                            <input value={url} onChange={e => setEditImages(prev => ({ ...prev, urlRows: prev.urlRows.map((v, idx) => idx === i ? e.target.value : v) }))}
-                                                                placeholder="Image URL" style={{ ...inp, border: 'none', backgroundColor: 'transparent', padding: '8px 8px 8px 0', fontSize: '13px' }} />
-                                                            {url && <img src={url} alt="" style={{ width: '30px', height: '30px', objectFit: 'cover', margin: '4px', borderRadius: '4px' }} onError={e => { e.target.style.display = 'none'; }} />}
-                                                        </div>
-                                                        <button type="button" onClick={() => setEditImages(prev => ({ ...prev, urlRows: prev.urlRows.filter((_, idx) => idx !== i) }))}
-                                                            style={{ border: 'none', background: '#fee2e2', color: '#ef4444', borderRadius: '6px', width: '30px', height: '30px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                                            <X size={12} />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <button type="button" onClick={() => setEditImages(prev => ({ ...prev, urlRows: [...prev.urlRows, ''] }))}
-                                                    style={{ fontSize: '12px', border: '1px dashed #cbd5e1', background: 'none', color: c.slate, borderRadius: '6px', padding: '5px 10px', cursor: 'pointer', marginBottom: '8px' }}>
-                                                    <Plus size={11} style={{ marginRight: '4px' }} /> Add URL
-                                                </button>
+                        <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                            <button
+                                type="submit"
+                                style={{
+                                    background: c.dark, color: '#ffffff', border: 'none',
+                                    borderRadius: '8px', padding: '12px 28px', fontSize: '15px',
+                                    fontWeight: '700', cursor: 'pointer'
+                                }}
+                            >
+                                {editingId ? 'Update Product' : 'Add to Catalog'}
+                            </button>
+                            {editingId && (
+                                <button
+                                    type="button" onClick={resetForm}
+                                    style={{
+                                        background: '#f1f5f9', color: '#475569', border: 'none',
+                                        borderRadius: '8px', padding: '12px 20px', fontSize: '15px',
+                                        fontWeight: '600', cursor: 'pointer'
+                                    }}
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                    </form>
+                </div>
 
-                                                <div>
-                                                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: c.white, border: '1px solid #e0e5f2', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', fontSize: '12px', color: c.forest, fontWeight: '600' }}>
-                                                        <Upload size={12} /> Upload from device
-                                                        <input type="file" multiple accept="image/*" style={{ display: 'none' }}
-                                                            onChange={e => { setEditImages(prev => ({ ...prev, fileRows: [...prev.fileRows, ...Array.from(e.target.files)] })); e.target.value = ''; }} />
-                                                    </label>
-                                                    {editImages.fileRows.length > 0 && (
-                                                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
-                                                            {editImages.fileRows.map((file, i) => (
-                                                                <div key={i} style={{ position: 'relative' }}>
-                                                                    <img src={URL.createObjectURL(file)} alt="" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '6px' }} />
-                                                                    <button type="button" onClick={() => setEditImages(prev => ({ ...prev, fileRows: prev.fileRows.filter((_, idx) => idx !== i) }))}
-                                                                        style={{ position: 'absolute', top: '-5px', right: '-5px', width: '16px', height: '16px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '50%', cursor: 'pointer', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+                {/* Filters */}
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap' }}>
+                    {['All', 'Men', 'Women', 'Unisex', 'T-Shirts', 'Hoodies'].map(tab => (
+                        <button
+                            key={tab} onClick={() => setActiveTab(tab)}
+                            style={{
+                                padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: '600',
+                                border: 'none', cursor: 'pointer',
+                                background: activeTab === tab ? c.dark : '#ffffff',
+                                color: activeTab === tab ? '#ffffff' : '#64748b',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                            }}
+                        >
+                            {tab}
+                        </button>
+                    ))}
+                </div>
 
-                                            <div style={{ display: 'flex', gap: '8px' }}>
-                                                <button onClick={() => saveEdit(p._id)} style={{ flex: 1, padding: '10px', backgroundColor: c.forest, color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '13px' }}>
-                                                    <Check size={15} /> Save Changes
-                                                </button>
-                                                <button onClick={() => setEditingId(null)} style={{ flex: 1, padding: '10px', backgroundColor: c.light, color: c.slate, border: 'none', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '13px' }}>
-                                                    <X size={15} /> Cancel
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: '700', color: c.chocolate }}>{p.name}</h3>
-                                                <div style={{ color: c.purple, fontWeight: '900', fontSize: '15px', display: 'flex', alignItems: 'center' }}>
-                                                    <IndianRupee size={13} />{p.weights?.[0]?.price || p.price || 0}
-                                                    {p.weights?.length > 1 && <span style={{ fontSize: '11px', color: c.slate, marginLeft: '4px', fontWeight: 'normal' }}>+</span>}
-                                                </div>
-                                            </div>
-                                            <p style={{ color: '#a3aed0', fontSize: '13px', lineHeight: '1.5', margin: '0 0 14px', height: '38px', overflow: 'hidden' }}>{p.description}</p>
-                                            <div style={{ fontSize: '11px', color: c.slate, marginBottom: '12px' }}>
-                                                {images.length} image{images.length !== 1 ? 's' : ''}
-                                            </div>
-
-                                            {/* Status Tags */}
-                                            <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
-                                                {p.isHidden && (
-                                                    <span style={{ backgroundColor: '#fef3c7', color: '#92400e', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' }}>🙈 Hidden from Menu</span>
-                                                )}
-                                                {!p.isAvailable && (
-                                                    <span style={{ backgroundColor: '#fecdd3', color: '#9f1239', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' }}>🚫 Sold Out</span>
-                                                )}
-                                                {!p.isHidden && p.isAvailable && (
-                                                    <span style={{ backgroundColor: '#dcfce7', color: '#166534', fontSize: '11px', fontWeight: '700', padding: '3px 10px', borderRadius: '20px' }}>✅ Live</span>
-                                                )}
-                                            </div>
-
-                                            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                {/* Sold Out Toggle */}
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <span style={{ fontSize: '12px', fontWeight: '600', color: c.slate }}>Sold Out (shows on menu)</span>
-                                                    <button onClick={() => handleToggleAvailable(p)} style={{ display: 'flex', alignItems: 'center', gap: '5px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
-                                                        {!p.isAvailable
-                                                            ? <><ToggleRight size={28} color="#ef4444" /><span style={{ fontSize: '11px', fontWeight: '700', color: '#ef4444' }}>Sold Out</span></>
-                                                            : <><ToggleLeft size={28} color="#cbd5e1" /><span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>In Stock</span></>
-                                                        }
-                                                    </button>
-                                                </div>
-                                                {/* Hide from Menu Toggle */}
-                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                    <span style={{ fontSize: '12px', fontWeight: '600', color: c.slate }}>Hide from Menu</span>
-                                                    <button onClick={() => handleToggleHidden(p)} style={{ display: 'flex', alignItems: 'center', gap: '5px', border: 'none', background: 'none', cursor: 'pointer', padding: 0 }}>
-                                                        {p.isHidden
-                                                            ? <><ToggleRight size={28} color="#f59e0b" /><span style={{ fontSize: '11px', fontWeight: '700', color: '#f59e0b' }}>Hidden</span></>
-                                                            : <><ToggleLeft size={28} color="#cbd5e1" /><span style={{ fontSize: '11px', fontWeight: '700', color: '#94a3b8' }}>Visible</span></>
-                                                        }
-                                                    </button>
-                                                </div>
-                                                {/* Edit Button */}
-                                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}>
-                                                    <button onClick={() => startEdit(p)} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#eef2ff', color: c.purple, border: 'none', padding: '7px 13px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px' }}>
-                                                        <Pencil size={12} /> Edit
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
+                {/* Catalog Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+                    {filteredProducts.map(p => (
+                        <div key={p._id} style={{
+                            background: '#ffffff', borderRadius: '12px', overflow: 'hidden',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.04)', border: '1px solid #e2e8f0',
+                            display: 'flex', flexDirection: 'column'
+                        }}>
+                            <div style={{ height: '220px', overflow: 'hidden', position: 'relative', background: '#f8fafc' }}>
+                                <img 
+                                    src={p.images?.[0] ? getImageUrl(p.images[0]) : (p.image ? getImageUrl(p.image) : '')} 
+                                    alt={p.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={e => { e.target.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800'; }}
+                                />
+                                <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', gap: '4px' }}>
+                                    {p.isNewDrop && <span style={{ background: '#09090b', color: '#fff', fontSize: '10px', padding: '3px 6px', borderRadius: '4px', fontWeight: '700' }}>NEW</span>}
+                                    {p.gender && <span style={{ background: 'rgba(255,255,255,0.9)', color: '#09090b', fontSize: '10px', padding: '3px 6px', borderRadius: '4px', fontWeight: '700' }}>{p.gender}</span>}
                                 </div>
                             </div>
-                        );
-                    })}
+                            <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                <div>
+                                    <div style={{ fontSize: '11px', color: '#a1a1aa', fontWeight: '600', textTransform: 'uppercase' }}>
+                                        {p.brand || 'True Threads'} • {p.category}
+                                    </div>
+                                    <h3 style={{ margin: '4px 0 8px', fontSize: '16px', fontWeight: '700', color: c.dark }}>
+                                        {p.name}
+                                    </h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                                        <span style={{ fontSize: '16px', fontWeight: '800', color: c.dark }}>
+                                            ₹{p.discountPrice && p.discountPrice > 0 ? p.discountPrice : p.price}
+                                        </span>
+                                        {p.discountPrice && p.discountPrice > 0 && (
+                                            <span style={{ fontSize: '13px', color: '#94a3b8', textDecoration: 'line-through' }}>
+                                                ₹{p.price}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                                        {(p.sizes || []).map(s => {
+                                            const v = p.variants?.find(x => x.size === s);
+                                            const stock = v ? v.stock : '-';
+                                            return (
+                                                <span key={s} style={{
+                                                    fontSize: '11px', fontWeight: '600', background: '#f1f5f9',
+                                                    padding: '2px 6px', borderRadius: '4px', color: '#334155'
+                                                }}>
+                                                    {s}: {stock}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}>
+                                    <button
+                                        onClick={() => toggleAvailability(p)}
+                                        style={{
+                                            background: 'none', border: 'none', cursor: 'pointer',
+                                            display: 'flex', alignItems: 'center', gap: '6px',
+                                            fontSize: '13px', fontWeight: '600',
+                                            color: p.isAvailable ? '#16a34a' : '#dc2626'
+                                        }}
+                                    >
+                                        {p.isAvailable ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                                        {p.isAvailable ? 'In Stock' : 'Hidden'}
+                                    </button>
+
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => handleEditClick(p)}
+                                            style={{
+                                                background: '#f1f5f9', border: 'none', borderRadius: '6px',
+                                                padding: '6px 10px', cursor: 'pointer', color: '#334155'
+                                            }}
+                                        >
+                                            <Pencil size={15} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(p._id)}
+                                            style={{
+                                                background: '#fee2e2', border: 'none', borderRadius: '6px',
+                                                padding: '6px 10px', cursor: 'pointer', color: '#ef4444'
+                                            }}
+                                        >
+                                            <Trash2 size={15} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            )}
+            </div>
         </div>
     );
-};
-
-export default EditMenu;
+}

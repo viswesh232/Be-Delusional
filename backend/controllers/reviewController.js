@@ -1,5 +1,6 @@
 const Review  = require('../models/Review');
 const Product = require('../models/Product');
+const Order   = require('../models/Order');
 
 // ── GET all reviews for a product ────────────────────────────────────────────
 // @route GET /api/reviews/:productId
@@ -17,7 +18,7 @@ exports.getProductReviews = async (req, res) => {
 // @route POST /api/reviews/:productId
 exports.addReview = async (req, res) => {
     try {
-        const { rating, title, body } = req.body;
+        const { rating, title, body, fitFeedback, sizePurchased, customerHeight } = req.body;
         if (!rating || !body) {
             return res.status(400).json({ message: 'Rating and review text are required' });
         }
@@ -37,30 +38,22 @@ exports.addReview = async (req, res) => {
             return res.status(400).json({ message: 'You have already reviewed this product' });
         }
 
-        // Check if user has ordered this product
-        const Order = require('../models/Order');
-        const hasOrdered = await Order.findOne({
-            user: req.user._id,
-            'orderItems.product': req.params.productId
-        });
-
-        if (!hasOrdered) {
-            return res.status(400).json({ message: 'You must order this product before you can review it.' });
-        }
-
         // Check product exists
         const product = await Product.findById(req.params.productId);
         if (!product) return res.status(404).json({ message: 'Product not found' });
 
         const review = await Review.create({
-            product:    req.params.productId,
-            user:       req.user._id,
-            rating:     Number(rating),
-            title:      title || '',
+            product:        req.params.productId,
+            user:           req.user._id,
+            rating:         Number(rating),
+            title:          title || '',
             body,
             images,
-            userName:   req.user.firstName + ' ' + req.user.lastName,
-            userAvatar: req.user.firstName?.[0]?.toUpperCase() || '?',
+            fitFeedback:    fitFeedback || 'True to Size',
+            sizePurchased:  sizePurchased || '',
+            customerHeight: customerHeight || '',
+            userName:       req.user.firstName + ' ' + req.user.lastName,
+            userAvatar:     req.user.firstName?.[0]?.toUpperCase() || '?',
         });
 
         res.status(201).json(review);
@@ -85,7 +78,7 @@ exports.deleteReview = async (req, res) => {
     }
 };
 
-// ── GET all reviews (admin — for moderation page) ─────────────────────────────
+// ── GET all reviews (admin) ──────────────────────────────────────────────────
 // @route GET /api/reviews/admin/all
 exports.getAllReviews = async (req, res) => {
     try {

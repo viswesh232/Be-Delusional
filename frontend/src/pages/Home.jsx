@@ -1,391 +1,355 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../api/axios';
-import { AuthContext } from '../context/AuthContext';
-import { CartContext } from '../context/CartContext';
-import { getImageUrl } from '../utils/helpers';
-import heroImage from '../assets/hero.png';
-import banner1 from '../assets/banner.png';
-import logo from '../assets/logo.jpg'
-import banner2 from '../assets/banner2.png'
 import {
-    ShoppingCart, Search, ArrowRight, UserRound, Minus, Plus,
-    Camera, MessagesSquare, Play, Phone, MapPin,
-    ChevronLeft, ChevronRight, Star, Clock, Truck, Shield, Menu, X,
+    ArrowRight, Star, Clock, Truck, ShieldCheck, RefreshCw,
+    Sparkles, Filter, ChevronDown, Check
 } from 'lucide-react';
-import './Home.css';
+import ProductCard from '../components/ProductCard';
 
-// ─── ADD YOUR BANNERS HERE ────────────────────────────────────────────────────
-// Each banner needs: image, title, subtitle. Add as many as you like.
-const BANNERS = [
-    {
-        image: banner1,
-        title: 'Premium quality,\ndirect to your door.',
-        subtitle: 'Handpicked food products packed fresh and delivered across India in 7–10 days.',
-    },
-    {
-        image: banner2,
-        title: 'Eat better,\nlive better.',
-        subtitle: 'Clean ingredients, zero compromise. Every product is sourced and packed with care.',
-    },
-];
-
-const fmt = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
-
-const STATS = [['500+', 'Happy Customers'], ['20+', 'Products'], ['7–10 Days', 'Delivery'], ['4.9★', 'Rating']];
-const PERKS = [
-    [<Truck size={22} />, 'Pan-India Delivery', 'Delivered in 7–10 working days'],
-    [<Shield size={22} />, 'Quality Assured', 'Every product hygiene checked'],
-    [<Clock size={22} />, 'Long Shelf Life', 'Packed for freshness & safety'],
-    [<Star size={22} />, 'Top Rated', '4.9 stars from customers'],
-];
+const CATEGORIES = ['All', 'T-Shirts', 'Hoodies', 'Shirts', 'Pants', 'Jeans', 'Jackets'];
+const GENDERS = ['All', 'Men', 'Women', 'Unisex'];
 
 export default function Home() {
     const navigate = useNavigate();
     const location = useLocation();
 
     const [products, setProducts] = useState([]);
-
-    const [categories, setCategories] = useState(['All']);
-    const [activeCategory, setActiveCategory] = useState('All');
+    const [loading, setLoading] = useState(true);
 
     const queryParams = new URLSearchParams(location.search);
-    const searchParam = queryParams.get('search') || '';
-    const scrollToMenuParam = queryParams.get('scrollToMenu') === 'true';
+    const initialGender = queryParams.get('gender') || 'All';
+    const isNewDropOnly = queryParams.get('drop') === 'new';
 
-    const [searchTerm, setSearchTerm] = useState(searchParam);
-    const [toast, setToast] = useState('');
-    const [bannerIdx, setBannerIdx] = useState(0);
-
-    const [announcements, setAnnouncements] = useState([]);
-    const [announcementIdx, setAnnouncementIdx] = useState(0);
-
-    const [quickAddProduct, setQuickAddProduct] = useState(null);
-    const [selectedVariant, setSelectedVariant] = useState(null);
-    const [modalQty, setModalQty] = useState(1);
-    const [modalImageIdx, setModalImageIdx] = useState(0);
-
-    const { cartItems, addToCart } = useContext(CartContext);
-
-    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-    useEffect(() => {
-        const onResize = () => setWindowWidth(window.innerWidth);
-        window.addEventListener('resize', onResize);
-        return () => window.removeEventListener('resize', onResize);
-    }, []);
-    const isMobile = windowWidth <= 480;
-    const isTablet = windowWidth <= 768;
+    const [activeGender, setActiveGender] = useState(initialGender);
+    const [activeCategory, setActiveCategory] = useState('All');
+    const [sortBy, setSortBy] = useState('newest');
 
     useEffect(() => {
-        if (searchParam) {
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            setSearchTerm(searchParam);
-            document.getElementById('menu-section')?.scrollIntoView({ behavior: 'smooth' });
+        const query = new URLSearchParams(location.search);
+        const g = query.get('gender') || 'All';
+        setActiveGender(g);
+    }, [location.search]);
+
+    const fetchProducts = async () => {
+        setLoading(true);
+        try {
+            let url = '/products';
+            const params = new URLSearchParams();
+            if (activeGender !== 'All') params.append('gender', activeGender);
+            if (activeCategory !== 'All') params.append('category', activeCategory);
+            if (isNewDropOnly) params.append('isNewDrop', 'true');
+            if (sortBy) params.append('sort', sortBy);
+
+            if (params.toString()) {
+                url += `?${params.toString()}`;
+            }
+
+            const res = await API.get(url);
+            setProducts(res.data);
+        } catch (err) {
+            console.error('Failed to fetch products', err);
+        } finally {
+            setLoading(false);
         }
-    }, [searchParam]);
-
-    useEffect(() => {
-        if (scrollToMenuParam) {
-            // Slight delay ensures the DOM is fully painted if we just routed from another page
-            setTimeout(() => {
-                document.getElementById('menu-section')?.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
-        }
-    }, [scrollToMenuParam]);
-
-    useEffect(() => {
-        (async () => {
-            try {
-                const [{ data: menu }, { data: settings }] = await Promise.all([
-                    API.get('/products'),
-                    API.get('/settings').catch(() => ({ data: {} })),
-                ]);
-                setProducts(menu || []);
-                setCategories(['All', ...new Set((menu || []).map(p => p.category).filter(Boolean))]);
-                const anns = settings?.announcements?.filter(a => a.active) || [];
-                setAnnouncements(anns);
-            } catch (e) { console.error(e); }
-        })();
-    }, []);
-
-    useEffect(() => {
-        if (BANNERS.length <= 1) return;
-        const t = setInterval(() => setBannerIdx(s => (s + 1) % BANNERS.length), 5000);
-        return () => clearInterval(t);
-    }, []);
-
-    useEffect(() => {
-        if (announcements.length <= 1) return;
-        const t = setInterval(() => setAnnouncementIdx(s => (s + 1) % announcements.length), 4000);
-        return () => clearInterval(t);
-    }, [announcements.length]);
-
-    useEffect(() => {
-        if (announcementIdx >= announcements.length) {
-            setAnnouncementIdx(0);
-        }
-    }, [announcements.length, announcementIdx]);
-
-    const filtered = useMemo(() => products.filter(p => {
-        if (p.isHidden) return false;
-        const cat = activeCategory === 'All' || p.category === activeCategory;
-        const src = `${p.name} ${p.description || ''} ${p.category || ''}`.toLowerCase();
-        return cat && (!searchTerm.trim() || src.includes(searchTerm.toLowerCase()));
-    }), [activeCategory, products, searchTerm]);
-
-    const backendUrl = API.defaults.baseURL.replace('/api', '');
-
-    const getQty = id => cartItems.find(i => i._id === id)?.qty || 0;
-    const getImgs = p => {
-        const a = (p.images || []).filter(Boolean).map(getImageUrl);
-        return a.length ? a : (p.image ? [getImageUrl(p.image)] : []);
     };
 
-    const openQuickAdd = (p) => {
-        setQuickAddProduct(p);
-        setSelectedVariant(p.weights?.[0] || null);
-        setModalQty(1);
-        setModalImageIdx(0);
-    };
-
-    const scrollMenu = () => document.getElementById('menu-section')?.scrollIntoView({ behavior: 'smooth' });
-    const curBanner = BANNERS[bannerIdx] || BANNERS[0];
+    useEffect(() => {
+        fetchProducts();
+    }, [activeGender, activeCategory, sortBy, isNewDropOnly]);
 
     return (
-        <>
-            {toast && <div className="toast">✓ {toast}</div>}
+        <div style={{ backgroundColor: '#ffffff', minHeight: '100vh', fontFamily: 'inherit' }}>
+            
+            {/* Hero Section */}
+            <section style={{
+                position: 'relative',
+                backgroundColor: '#09090b',
+                color: '#ffffff',
+                padding: '100px 24px 110px',
+                textAlign: 'center',
+                overflow: 'hidden'
+            }}>
+                {/* Background subtle glow */}
+                <div style={{
+                    position: 'absolute', top: '-50%', left: '50%', transform: 'translateX(-50%)',
+                    width: '800px', height: '400px', background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 70%)',
+                    pointerEvents: 'none'
+                }} />
 
-            {/* ANNOUNCEMENT */}
-            {announcements.length > 0 && announcements[announcementIdx] && (
-                <div className="announce" style={{ transition: 'all 0.3s ease-in-out' }}>
-                    {announcements[announcementIdx].emoji} {announcements[announcementIdx].text}
-                </div>
-            )}
+                <div style={{ maxWidth: '900px', margin: '0 auto', position: 'relative', zIndex: 2 }}>
+                    <span style={{
+                        display: 'inline-block',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        padding: '6px 16px', borderRadius: '30px',
+                        fontSize: '12px', fontWeight: '700', letterSpacing: '1.5px',
+                        textTransform: 'uppercase', marginBottom: '24px'
+                    }}>
+                        {isNewDropOnly ? '⚡ Limited Drop Release' : 'A/W 2026 Collection'}
+                    </span>
 
-            {/* PHOTO SLIDER */}
-            <div style={{ display: 'block', width: '100%', fontSize: 0 }}>
-                <div style={{ position: 'relative', width: '100%', overflow: 'hidden' }}>
+                    <h1 style={{
+                        fontSize: 'clamp(36px, 6vw, 64px)',
+                        fontWeight: '900',
+                        letterSpacing: '-1.5px',
+                        lineHeight: '1.1',
+                        margin: '0 0 20px',
+                        textTransform: 'uppercase'
+                    }}>
+                        Uncompromising Fits.<br />Heavyweight Precision.
+                    </h1>
 
-                    {/* The photo */}
-                    <img
-                        src={BANNERS[bannerIdx].image}
-                        alt="True Eats"
-                        style={{ width: '100%', height: isMobile ? '220px' : isTablet ? '320px' : '480px', objectFit: 'cover', display: 'block', verticalAlign: 'top' }}
-                    />
+                    <p style={{
+                        fontSize: 'clamp(16px, 2vw, 19px)',
+                        color: '#a1a1aa',
+                        maxWidth: '640px',
+                        margin: '0 auto 36px',
+                        lineHeight: '1.6'
+                    }}>
+                        Engineered from 240+ GSM combed cotton with relaxed drop-shoulder silhouettes. Designed for effortless everyday layering.
+                    </p>
 
-                    {/* Prev / Next arrows */}
-                    {BANNERS.length > 1 && (<>
-                        <button onClick={() => setBannerIdx(i => (i - 1 + BANNERS.length) % BANNERS.length)}
-                            style={{ position: 'absolute', top: '50%', left: '12px', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.35)', border: 'none', borderRadius: '50%', width: isMobile ? '28px' : '38px', height: isMobile ? '28px' : '38px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
-                            <ChevronLeft size={isMobile ? 14 : 18} />
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={() => {
+                                const target = document.getElementById('collection-grid');
+                                target?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            style={{
+                                padding: '14px 34px', borderRadius: '8px',
+                                background: '#ffffff', color: '#09090b',
+                                border: 'none', fontSize: '15px', fontWeight: '700',
+                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+                            }}
+                        >
+                            Shop Collection <ArrowRight size={16} />
                         </button>
-                        <button onClick={() => setBannerIdx(i => (i + 1) % BANNERS.length)}
-                            style={{ position: 'absolute', top: '50%', right: '12px', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.35)', border: 'none', borderRadius: '50%', width: isMobile ? '28px' : '38px', height: isMobile ? '28px' : '38px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
-                            <ChevronRight size={isMobile ? 14 : 18} />
-                        </button>
-                    </>)}
-
-                    {/* Shop Now button — bottom left */}
-                    <button onClick={scrollMenu}
-                        style={{ position: 'absolute', bottom: isMobile ? '10px' : '18px', left: isMobile ? '12px' : '24px', display: 'flex', alignItems: 'center', gap: '6px', background: '#a5c11f', color: '#1a3a2a', border: 'none', borderRadius: '6px', padding: isMobile ? '6px 12px' : '9px 20px', fontSize: isMobile ? '12px' : '14px', fontWeight: '800', fontFamily: 'Inter, sans-serif', cursor: 'pointer', zIndex: 2 }}>
-                        Shop Now <ArrowRight size={isMobile ? 12 : 15} />
-                    </button>
-
-                    {/* Slide dots — bottom right */}
-                    {BANNERS.length > 1 && (
-                        <div style={{ position: 'absolute', bottom: isMobile ? '14px' : '22px', right: isMobile ? '12px' : '24px', display: 'flex', gap: '5px', zIndex: 2 }}>
-                            {BANNERS.map((_, i) => (
-                                <button key={i} onClick={() => setBannerIdx(i)}
-                                    style={{ width: i === bannerIdx ? '18px' : '7px', height: '7px', borderRadius: '999px', border: 'none', background: i === bannerIdx ? '#a5c11f' : 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 0, transition: 'all 0.25s' }} />
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* STATS BAR — directly below, no gap */}
-                <div style={{ display: 'flex', background: '#fcd5ce', borderTop: '3px solid #f9bbb0', fontSize: '14px' }}>
-                    {STATS.map(([num, label]) => (
-                        <div key={label} style={{ flex: 1, textAlign: 'center', padding: isMobile ? '10px 4px' : '14px 8px', borderRight: '1px solid rgba(74,44,42,0.12)' }}>
-                            <span style={{ display: 'block', fontSize: isMobile ? '16px' : '20px', fontWeight: '900', color: '#1a4331' }}>{num}</span>
-                            <span style={{ fontSize: isMobile ? '9px' : '10px', color: '#6b4c43', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
-                        </div>
-                    ))}
-                    <div style={{ borderRight: 'none' }} />
-                </div>
-            </div>
-
-
-
-            {/* PERKS */}
-            <div className="perks">
-                {PERKS.map(([icon, title, desc]) => (
-                    <div key={title} className="perk">
-                        <div className="perk-icon">{icon}</div>
-                        <div><div className="perk-title">{title}</div><div className="perk-desc">{desc}</div></div>
-                    </div>
-                ))}
-            </div>
-
-            {/* MENU */}
-            <div className="section-full" id="menu-section">
-                <div className="section-label">🛍️ Our Products</div>
-                <h2 className="section-title">Browse &amp; Order</h2>
-                <div className="cat-row">
-                    {categories.map(cat => (
-                        <button key={cat} className={`cat-pill${activeCategory === cat ? ' active' : ''}`} onClick={() => setActiveCategory(cat)}>{cat}</button>
-                    ))}
-                </div>
-
-                {filtered.length === 0 ? (
-                    <div className="empty">Nothing matched your search.</div>
-                ) : (
-                    <div className="vcard-shelf">
-                        {filtered.map(p => {
-                            const imgs = getImgs(p);
-                            const qty = getQty(p._id);
-                            const rating = p.rating || null;
-                            const reviewCount = p.reviewCount || p.numReviews || 0;
-                            const stars = rating ? '★'.repeat(Math.round(rating)) + '☆'.repeat(5 - Math.round(rating)) : null;
-                            const origPrice = p.originalPrice || p.comparePrice || null;
-                            const basePrice = p.weights?.[0]?.price || p.price || 0;
-                            const discount = origPrice && origPrice > basePrice
-                                ? Math.round((1 - basePrice / origPrice) * 100)
-                                : null;
-                            return (
-                                <div key={p._id} className="vcard">
-                                    {/* Image with hover-swap + badge + quick-add */}
-                                    <div className="vcard-img-wrap">
-                                        {imgs[0]
-                                            ? <img src={imgs[0]} alt={p.name} className="vcard-img" onClick={() => navigate(`/product/${p.slug || p._id}`)} />
-                                            : <div className="vcard-img img-placeholder">📦</div>
-                                        }
-                                        {imgs[1] && <img src={imgs[1]} alt={p.name} className="vcard-img-hover" onClick={() => navigate(`/product/${p.slug || p._id}`)} />}
-                                        {p.category && <span className="vcard-badge">{p.category}</span>}
-                                        {qty === 0 && (
-                                            <button className="vcard-quick" onClick={() => openQuickAdd(p)}>Choose Options</button>
-                                        )}
-                                    </div>
-                                    {/* Info */}
-                                    <div className="vcard-body">
-                                        <button className="vcard-name" onClick={() => navigate(`/product/${p.slug || p._id}`)}>{p.name}</button>
-                                        {stars && (
-                                            <div className="vcard-rating">
-                                                <span className="vcard-stars">{stars}</span>
-                                                <span className="vcard-rating-text">{rating} ({reviewCount})</span>
-                                            </div>
-                                        )}
-                                        <div className="vcard-price-row">
-                                            <span className="vcard-price">{fmt(basePrice)}</span>
-                                            {origPrice && origPrice > basePrice && (
-                                                <span className="vcard-price-orig">{fmt(origPrice)}</span>
-                                            )}
-                                            {discount && <span className="vcard-price-badge">{discount}% off</span>}
-                                        </div>
-                                        <button className="vcard-add" onClick={() => openQuickAdd(p)}>Choose Options</button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
-            {/* STORY */}
-            <section className="story-band">
-                <div className="story-inner">
-                    <div>
-                        <div className="section-label" style={{ color: '#a5c11f' }}>🌱 About True Eats</div>
-                        <h2 className="section-title" style={{ color: '#fff' }}>Quality food products, delivered to you.</h2>
-                        <p style={{ color: 'rgba(255,255,255,0.7)', lineHeight: 1.9, marginTop: '14px' }}>
-                            True Eats curates and sells premium food products with a focus on quality, freshness, and transparency. Every item is carefully sourced, hygiene-checked, and packed to reach you in perfect condition.
-                        </p>
-                        <button className="cta-primary" style={{ marginTop: '28px' }} onClick={() => navigate('/our-story')}>
-                            Read our story <ArrowRight size={16} />
+                        <button
+                            onClick={() => navigate('/our-story')}
+                            style={{
+                                padding: '14px 28px', borderRadius: '8px',
+                                background: 'transparent', color: '#ffffff',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                fontSize: '15px', fontWeight: '600', cursor: 'pointer'
+                            }}
+                        >
+                            The Fabric Standard
                         </button>
                     </div>
-                    <img src={logo} alt="True Eats products" className="story-img" />
                 </div>
             </section>
 
-            {/* QUICK ADD MODAL */}
-            {quickAddProduct && (
-                <div className="qa-overlay" onClick={() => setQuickAddProduct(null)}>
-                    <div className="qa-modal" onClick={e => e.stopPropagation()}>
-                        <button className="qa-close" onClick={() => setQuickAddProduct(null)}><X size={24} /></button>
-                        <div className="qa-content">
-                            {/* Left: Gallery */}
-                            <div className="qa-gallery">
-                                <img src={getImgs(quickAddProduct)[modalImageIdx] || '/placeholder.png'} alt={quickAddProduct.name} className="qa-main-img" />
-                                {getImgs(quickAddProduct).length > 1 && (
-                                    <div className="qa-thumbnails">
-                                        {getImgs(quickAddProduct).map((img, i) => (
-                                            <img key={i} src={img} className={i === modalImageIdx ? 'active' : ''} onClick={() => setModalImageIdx(i)} alt="thumbnail" />
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+            {/* Quick Category Banners */}
+            <section style={{ maxWidth: '1360px', margin: '40px auto', padding: '0 20px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+                    
+                    <div 
+                        onClick={() => setActiveGender('Men')}
+                        style={{
+                            position: 'relative', height: '240px', borderRadius: '16px', overflow: 'hidden',
+                            cursor: 'pointer', backgroundColor: '#18181b'
+                        }}
+                    >
+                        <img 
+                            src="https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?w=800&auto=format&fit=crop&q=80" 
+                            alt="Men's Fits" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75, transition: 'transform 0.4s ease' }}
+                            onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+                            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#e4e4e7', textTransform: 'uppercase', letterSpacing: '1px' }}>Collection</span>
+                            <h3 style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '800', color: '#ffffff' }}>Men's Fits</h3>
+                        </div>
+                    </div>
 
-                            {/* Right: Details */}
-                            <div className="qa-details">
-                                <h2 className="qa-title">{quickAddProduct.name}</h2>
-                                {quickAddProduct.description && (
-                                    <p className="qa-desc">{quickAddProduct.description}</p>
-                                )}
-                                <div className="qa-price">
-                                    {fmt(selectedVariant ? selectedVariant.price : quickAddProduct.price)}
-                                    {selectedVariant?.originalPrice && selectedVariant.originalPrice > selectedVariant.price && (
-                                        <span className="qa-price-orig">{fmt(selectedVariant.originalPrice)}</span>
-                                    )}
-                                </div>
+                    <div 
+                        onClick={() => setActiveGender('Women')}
+                        style={{
+                            position: 'relative', height: '240px', borderRadius: '16px', overflow: 'hidden',
+                            cursor: 'pointer', backgroundColor: '#18181b'
+                        }}
+                    >
+                        <img 
+                            src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&auto=format&fit=crop&q=80" 
+                            alt="Women's Fits" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75, transition: 'transform 0.4s ease' }}
+                            onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+                            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#e4e4e7', textTransform: 'uppercase', letterSpacing: '1px' }}>Collection</span>
+                            <h3 style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '800', color: '#ffffff' }}>Women's Fits</h3>
+                        </div>
+                    </div>
 
-                                {quickAddProduct.weights && quickAddProduct.weights.length > 0 && (
-                                    <div className="qa-variants">
-                                        <label>Weight / Size</label>
-                                        <div className="qa-pills">
-                                            {quickAddProduct.weights.map(w => (
-                                                <button
-                                                    key={w.weight}
-                                                    className={`qa-pill ${selectedVariant?.weight === w.weight ? 'active' : ''}`}
-                                                    onClick={() => setSelectedVariant(w)}
-                                                >
-                                                    {w.weight}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
+                    <div 
+                        onClick={() => setActiveCategory('Hoodies')}
+                        style={{
+                            position: 'relative', height: '240px', borderRadius: '16px', overflow: 'hidden',
+                            cursor: 'pointer', backgroundColor: '#18181b'
+                        }}
+                    >
+                        <img 
+                            src="https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=800&auto=format&fit=crop&q=80" 
+                            alt="Heavyweight Hoodies" 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.75, transition: 'transform 0.4s ease' }}
+                            onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+                            onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)' }}>
+                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#e4e4e7', textTransform: 'uppercase', letterSpacing: '1px' }}>Streetwear</span>
+                            <h3 style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: '800', color: '#ffffff' }}>Heavy Hoodies</h3>
+                        </div>
+                    </div>
 
-                                <div className="qa-qty-row">
-                                    <label>Quantity</label>
-                                    <div className="qa-qty-ctrl">
-                                        <button onClick={() => setModalQty(Math.max(1, modalQty - 1))}><Minus size={16} /></button>
-                                        <span>{modalQty}</span>
-                                        <button onClick={() => setModalQty(modalQty + 1)}><Plus size={16} /></button>
-                                    </div>
-                                </div>
+                </div>
+            </section>
 
-                                <div className="qa-actions">
-                                    <button className="qa-add-btn" onClick={() => {
-                                        addToCart({ ...quickAddProduct, weight: selectedVariant?.weight, price: selectedVariant?.price || quickAddProduct.price, originalPrice: selectedVariant?.originalPrice || quickAddProduct.originalPrice }, modalQty);
-                                        setToast(`${modalQty}x ${quickAddProduct.name} added!`);
-                                        setTimeout(() => setToast(''), 2000);
-                                        setQuickAddProduct(null);
-                                    }}>Add to Cart</button>
+            {/* Catalog & Filter Section */}
+            <section id="collection-grid" style={{ maxWidth: '1360px', margin: '60px auto', padding: '0 20px' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px', marginBottom: '32px' }}>
+                    <div>
+                        <h2 style={{ fontSize: '28px', fontWeight: '800', color: '#09090b', margin: 0, letterSpacing: '-0.5px' }}>
+                            {activeGender === 'All' ? 'Complete Collection' : `${activeGender}'s Collection`}
+                        </h2>
+                        <p style={{ fontSize: '14px', color: '#71717a', margin: '4px 0 0' }}>
+                            Showing {products.length} garments
+                        </p>
+                    </div>
 
-                                    <button className="qa-buy-btn" onClick={() => {
-                                        addToCart({ ...quickAddProduct, weight: selectedVariant?.weight, price: selectedVariant?.price || quickAddProduct.price, originalPrice: selectedVariant?.originalPrice || quickAddProduct.originalPrice }, modalQty);
-                                        navigate('/checkout');
-                                    }}>Buy Now</button>
-                                </div>
+                    {/* Sorting Dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: '600', color: '#71717a' }}>Sort by:</span>
+                        <select
+                            value={sortBy}
+                            onChange={e => setSortBy(e.target.value)}
+                            style={{
+                                padding: '8px 14px', borderRadius: '8px', border: '1px solid #e4e4e7',
+                                backgroundColor: '#ffffff', fontSize: '13px', fontWeight: '600',
+                                color: '#09090b', outline: 'none', cursor: 'pointer'
+                            }}
+                        >
+                            <option value="newest">Newest Drops</option>
+                            <option value="price-asc">Price: Low to High</option>
+                            <option value="price-desc">Price: High to Low</option>
+                            <option value="bestseller">Bestsellers</option>
+                        </select>
+                    </div>
+                </div>
 
-                                <button className="qa-view-full" onClick={() => navigate(`/product/${quickAddProduct.slug || quickAddProduct._id}`)}>
-                                    View full details <ArrowRight size={16} />
-                                </button>
-                            </div>
+                {/* Filters Bar: Gender Tabs & Categories */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '36px' }}>
+                    {/* Gender Bar */}
+                    <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
+                        {GENDERS.map(g => (
+                            <button
+                                key={g}
+                                onClick={() => setActiveGender(g)}
+                                style={{
+                                    padding: '6px 16px', borderRadius: '20px', border: 'none',
+                                    fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+                                    background: activeGender === g ? '#09090b' : '#f4f4f5',
+                                    color: activeGender === g ? '#ffffff' : '#71717a',
+                                    transition: 'all 0.15s ease'
+                                }}
+                            >
+                                {g}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Category Pills */}
+                    <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                        {CATEGORIES.map(cat => (
+                            <button
+                                key={cat}
+                                onClick={() => setActiveCategory(cat)}
+                                style={{
+                                    padding: '6px 14px', borderRadius: '8px',
+                                    border: activeCategory === cat ? '1px solid #09090b' : '1px solid #e5e7eb',
+                                    fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                                    background: activeCategory === cat ? '#fafafa' : '#ffffff',
+                                    color: activeCategory === cat ? '#09090b' : '#71717a',
+                                    whiteSpace: 'nowrap'
+                                }}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Product Grid */}
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: '80px 20px', color: '#71717a' }}>
+                        Curating garments...
+                    </div>
+                ) : products.length === 0 ? (
+                    <div style={{
+                        textAlign: 'center', padding: '60px 20px', backgroundColor: '#fafafa',
+                        borderRadius: '16px', border: '1px solid #f4f4f5', maxWidth: '500px', margin: '0 auto'
+                    }}>
+                        <h3 style={{ fontSize: '18px', fontWeight: '700', margin: '0 0 8px' }}>No items in this filter</h3>
+                        <p style={{ fontSize: '14px', color: '#71717a', margin: '0 0 20px' }}>Try switching categories or check back shortly for new drops.</p>
+                        <button
+                            onClick={() => { setActiveCategory('All'); setActiveGender('All'); }}
+                            style={{ padding: '10px 20px', background: '#09090b', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: '700', cursor: 'pointer' }}
+                        >
+                            Reset Filters
+                        </button>
+                    </div>
+                ) : (
+                    <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                        gap: '28px'
+                    }}>
+                        {products.map(product => (
+                            <ProductCard key={product._id} product={product} />
+                        ))}
+                    </div>
+                )}
+
+            </section>
+
+            {/* Brand Perks / Standards */}
+            <section style={{ backgroundColor: '#f9fafb', borderTop: '1px solid #f3f4f6', padding: '60px 20px' }}>
+                <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '32px' }}>
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                            <ShieldCheck size={20} color="#09090b" />
+                        </div>
+                        <div>
+                            <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700' }}>240+ GSM Combed Cotton</h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b7280', lineHeight: '1.5' }}>Thick, durable, and pre-shrunk for maximum comfort and lasting shape.</p>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                            <RefreshCw size={20} color="#09090b" />
+                        </div>
+                        <div>
+                            <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700' }}>7-Day Size Exchanges</h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b7280', lineHeight: '1.5' }}>Wrong size? Exchange it in 1-click right from your account dashboard.</p>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                            <Truck size={20} color="#09090b" />
+                        </div>
+                        <div>
+                            <h4 style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: '700' }}>Fast Pan-India Shipping</h4>
+                            <p style={{ margin: 0, fontSize: '13px', color: '#6b7280', lineHeight: '1.5' }}>Dispatched within 24-48 hours with real-time SMS & email tracking.</p>
                         </div>
                     </div>
                 </div>
-            )}
-        </>
+            </section>
+
+        </div>
     );
 }
