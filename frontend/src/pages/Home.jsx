@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowDownRight, ArrowRight, ArrowUpRight, Instagram, Plus } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { getImageUrl } from '../utils/helpers';
