@@ -37,25 +37,25 @@ export default function EditMenu() {
 
     // Form state
     const [formData, setFormData] = useState({
-        name: '',
-        brand: 'True Threads',
-        price: '',
+        name: 'Project 001 — Oversized T-Shirt',
+        brand: 'Echo Chasing',
+        price: '1499',
         discountPrice: '',
         category: 'T-Shirts',
         subCategory: 'Oversized',
         gender: 'Unisex',
         description: '',
-        material: '100% Combed Cotton, 240 GSM',
+        material: 'Cotton',
         fit: 'Oversized Fit',
         careInstructions: 'Machine wash cold. Do not tumble dry.',
         modelStats: '',
         isAvailable: true,
         isNewDrop: true,
         isBestseller: false,
-        selectedSizes: ['S', 'M', 'L', 'XL'],
+        selectedSizes: ['S', 'M', 'L', 'XL', 'XXL'],
         colorName: 'Black',
         colorHex: '#09090b',
-        stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+        stockPerSize: {}
     });
 
     const [urlImages, setUrlImages] = useState(['']);
@@ -85,8 +85,8 @@ export default function EditMenu() {
                 : [...prev.selectedSizes, size];
             
             const newStock = { ...prev.stockPerSize };
-            if (!exists && !newStock[size]) {
-                newStock[size] = 20;
+            if (!exists && newStock[size] === undefined) {
+                newStock[size] = 0;
             }
             return { ...prev, selectedSizes: updated, stockPerSize: newStock };
         });
@@ -128,26 +128,26 @@ export default function EditMenu() {
 
     const handleEditClick = (p) => {
         setEditingId(p._id);
-        const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL'];
+        const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL', 'XXL'];
         const stockMap = {};
         if (Array.isArray(p.variants)) {
             p.variants.forEach(v => {
                 stockMap[v.size] = v.stock;
             });
         } else {
-            sizes.forEach(s => stockMap[s] = 20);
+            sizes.forEach(s => stockMap[s] = 0);
         }
 
         setFormData({
             name: p.name || '',
-            brand: p.brand || 'True Threads',
+            brand: p.brand || 'Echo Chasing',
             price: p.price || '',
             discountPrice: p.discountPrice || '',
             category: p.category || 'T-Shirts',
             subCategory: p.subCategory || '',
             gender: p.gender || 'Unisex',
             description: p.description || '',
-            material: p.material || '100% Cotton',
+            material: p.material || 'Cotton',
             fit: p.fit || 'Regular Fit',
             careInstructions: p.careInstructions || '',
             modelStats: p.modelStats || '',
@@ -173,7 +173,7 @@ export default function EditMenu() {
                 size,
                 color: formData.colorName,
                 colorHex: formData.colorHex,
-                stock: formData.stockPerSize[size] ?? 20,
+                stock: formData.stockPerSize[size] ?? 0,
                 price: Number(formData.price)
             }));
 
@@ -285,14 +285,14 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Product Title *</label>
                                 <input 
-                                    style={inp} required placeholder="e.g. Heavyweight Oversized Tee"
+                                    style={inp} required placeholder="Project 001 — Oversized T-Shirt"
                                     value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
                                 />
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Brand</label>
                                 <input 
-                                    style={inp} placeholder="True Threads"
+                                    style={inp} placeholder="Echo Chasing"
                                     value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}
                                 />
                             </div>
@@ -325,7 +325,7 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Regular Price (₹) *</label>
                                 <input 
-                                    type="number" style={inp} required placeholder="1299"
+                                    type="number" style={inp} required placeholder="1499"
                                     value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })}
                                 />
                             </div>
@@ -403,7 +403,7 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Material / Fabric</label>
                                 <input 
-                                    style={inp} placeholder="100% Combed Cotton, 240 GSM"
+                                    style={inp} placeholder="Cotton"
                                     value={formData.material} onChange={e => setFormData({ ...formData, material: e.target.value })}
                                 />
                             </div>
