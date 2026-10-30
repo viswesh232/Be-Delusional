@@ -101,25 +101,25 @@ export default function EditMenu() {
 
     const resetForm = () => {
         setFormData({
-            name: '',
-            brand: 'True Threads',
-            price: '',
+            name: 'Project 001 — Oversized T-Shirt',
+            brand: 'Echo Chasing',
+            price: '1499',
             discountPrice: '',
             category: 'T-Shirts',
             subCategory: 'Oversized',
             gender: 'Unisex',
             description: '',
-            material: '100% Combed Cotton, 240 GSM',
+            material: 'Cotton',
             fit: 'Oversized Fit',
             careInstructions: 'Machine wash cold. Do not tumble dry.',
             modelStats: '',
             isAvailable: true,
             isNewDrop: true,
             isBestseller: false,
-            selectedSizes: ['S', 'M', 'L', 'XL'],
+            selectedSizes: ['S', 'M', 'L', 'XL', 'XXL'],
             colorName: 'Black',
             colorHex: '#09090b',
-            stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+            stockPerSize: {}
         });
         setUrlImages(['']);
         setFileImages([]);
