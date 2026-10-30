@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../api/axios';
-import { Activity, ArrowDownRight, ArrowUpRight, BarChart3, Boxes, CreditCard, ExternalLink, LogOut, Menu, Package, Settings, ShoppingBag, Users, X, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, BarChart3, CreditCard, ExternalLink, LogOut, Menu, Package, Settings, ShoppingBag, Users, X, RefreshCw, Truck, FileText, ShieldCheck, Star, MessageCircle, Mail } from 'lucide-react';
 
 const money = value => new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(value)||0);
 const modules = [
@@ -12,6 +12,12 @@ const modules = [
   {label:'Customers',desc:'Find customers and view order history',path:'/admin/customer-search',icon:Users},
   {label:'Payments',desc:'Transactions and payment records',path:'/admin/payments',icon:CreditCard},
   {label:'Returns & exchanges',desc:'Handle size exchanges and return requests',path:'/admin/returns',icon:RefreshCw},
+  {label:'Delivery management',desc:'Delivery details and fulfilment information',path:'/admin/delivery',icon:Truck},
+  {label:'Bill generator',desc:'Create and print customer invoices',path:'/admin/bills',icon:FileText},
+  {label:'Permissions',desc:'Manage admin access and roles',path:'/admin/permissions',icon:ShieldCheck},
+  {label:'Reviews',desc:'Moderate product reviews and ratings',path:'/admin/reviews',icon:Star},
+  {label:'Customer support',desc:'Resolve customer support requests',path:'/admin/support',icon:MessageCircle},
+  {label:'Reach out',desc:'Manage customer enquiries and messages',path:'/admin/reach-out',icon:Mail},
   {label:'Store settings',desc:'Shipping, coupons and store configuration',path:'/admin/settings',icon:Settings}
 ];
 
@@ -61,7 +67,7 @@ export default function AdminDashboard(){
         <div><span className="ec-admin-eyebrow">PROJECT 001 / INVENTORY SNAPSHOT</span><h2>First drop inventory</h2><p>Keep an eye on available units across every size.</p></div>
         <div className="ec-admin-stock-total"><strong>{loading?'—':units}</strong><span>UNITS RECORDED</span><button onClick={()=>navigate('/admin/edit-menu')}>MANAGE STOCK <ArrowUpRight size={15}/></button></div>
       </section>
-      <section className="ec-admin-section-head"><div><span className="ec-admin-eyebrow">YOUR STORE TOOLS</span><h2>Manage the business</h2></div><span>07 MODULES</span></section>
+      <section className="ec-admin-section-head"><div><span className="ec-admin-eyebrow">YOUR STORE TOOLS</span><h2>Manage the business</h2></div><span>{String(modules.length).padStart(2,'0')} MODULES</span></section>
       <section className="ec-admin-modules">{modules.map(({label,desc,path,icon:Icon},i)=><button className="ec-admin-module" key={path} onClick={()=>navigate(path)}><span className="ec-admin-module-index">0{i+1}</span><span className="ec-admin-module-icon"><Icon size={20}/></span><span className="ec-admin-module-copy"><strong>{label}</strong><small>{desc}</small></span><ArrowUpRight className="ec-admin-module-arrow" size={18}/></button>)}</section>
       <section className="ec-admin-recent"><div className="ec-admin-section-head"><div><span className="ec-admin-eyebrow">LATEST ACTIVITY</span><h2>Recent orders</h2></div><button onClick={()=>navigate('/admin/orders')}>ALL ORDERS <ArrowUpRight size={15}/></button></div>
         {loading?<p className="ec-admin-empty">Loading order activity…</p>:recent.length===0?<p className="ec-admin-empty">No orders yet. Your first customer order will appear here.</p>:<div className="ec-admin-table-wrap"><table className="ec-admin-table"><thead><tr><th>ORDER</th><th>CUSTOMER</th><th>DATE</th><th>AMOUNT</th><th>STATUS</th></tr></thead><tbody>{recent.map((o,i)=><tr key={o._id||i}><td>#{String(o._id||'').slice(-6).toUpperCase()||'—'}</td><td>{o.user?.firstName||o.shippingAddress?.name||o.customerName||'Customer'}</td><td>{o.createdAt?new Date(o.createdAt).toLocaleDateString('en-IN'):'—'}</td><td>{money(o.totalPrice)}</td><td><span className="ec-admin-status">{o.status||'Placed'}</span></td></tr>)}</tbody></table></div>}
