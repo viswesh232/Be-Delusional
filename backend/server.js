@@ -24,6 +24,9 @@ const path = require('path');
 // Allow only configured storefront origins. Keep CORS_ORIGINS as a comma-separated
 // allowlist in production (for example, the deployed storefront URL).
 const allowedOrigins = new Set([
+    // Current Render storefront origin. Keep this explicit so a missing Render
+    // environment variable cannot silently break the deployed customer app.
+    'https://be-delusional-test1.onrender.com',
     process.env.FRONTEND_URL,
     ...(process.env.CORS_ORIGINS || '').split(','),
     'http://localhost:5173',
