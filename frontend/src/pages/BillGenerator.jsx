@@ -26,21 +26,25 @@ const qtyBtnStyle = {
 };
 
 // ─── Shared bill HTML builder ─────────────────────────────────────────────────
+const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', [String.fromCharCode(39)]: '&#39;',
+}[char]));
+
 const buildBillHtml = (bill) => {
     const rows = bill.items.map(item => `
         <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;">
-            <span>${item.qty}x ${item.name}</span>
-            <span>Rs.${(item.price * item.qty).toFixed(2)}</span>
+            <span>${Number(item.qty) || 0}x ${escapeHtml(item.name)}</span>
+            <span>₹${(Number(item.price || 0) * Number(item.qty || 0)).toFixed(2)}</span>
         </div>`).join('');
     return `
         <div style="font-family:'Courier New',monospace;color:#222;padding:12px 16px;">
             <div style="text-align:center;border-bottom:2px dashed #000;padding-bottom:8px;margin-bottom:8px;">
-                <h3 style="margin:0;letter-spacing:2px;font-size:15px;">TRUE EATS</h3>
-                <p style="margin:2px 0;font-size:10px;opacity:.7;">The way food was meant to be</p>
+                <h3 style="margin:0;letter-spacing:2px;font-size:15px;">ECHO CHASING</h3>
+                <p style="margin:2px 0;font-size:10px;opacity:.7;">Less noise. More meaning. Always moving.</p>
             </div>
-            <p style="font-size:11px;margin:3px 0;"><b>Bill No:</b> ${bill.orderId}</p>
-            <p style="font-size:11px;margin:3px 0;"><b>Customer:</b> ${bill.customerName}</p>
-            ${bill.address ? `<p style="font-size:11px;margin:3px 0;"><b>Address:</b> ${bill.address}</p>` : ''}
+            <p style="font-size:11px;margin:3px 0;"><b>Bill No:</b> ${escapeHtml(bill.orderId)}</p>
+            <p style="font-size:11px;margin:3px 0;"><b>Customer:</b> ${escapeHtml(bill.customerName)}</p>
+            ${bill.address ? `<p style="font-size:11px;margin:3px 0;"><b>Address:</b> ${escapeHtml(bill.address)}</p>` : ''}
             <p style="font-size:11px;margin:3px 0;"><b>Date:</b> ${new Date().toLocaleString()}</p>
             <hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/>
             ${rows}
@@ -50,9 +54,9 @@ const buildBillHtml = (bill) => {
             ${bill.couponDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#16a34a;"><span>Coupon Discount</span><span>Rs.-${bill.couponDiscount.toFixed(2)}</span></div>` : ''}
             ${bill.userDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#16a34a;"><span>First-order Discount</span><span>Rs.-${bill.userDiscount.toFixed(2)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px;margin-top:4px;border-top:1px solid #000;padding-top:4px;"><span>TOTAL</span><span>Rs.${bill.total.toFixed(2)}</span></div>
-            ${bill.adminNote ? `<hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/><p style="font-size:11px;margin:3px 0;font-style:italic;"><b>Note:</b> ${bill.adminNote}</p>` : ''}
+            ${bill.adminNote ? `<hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/><p style="font-size:11px;margin:3px 0;font-style:italic;"><b>Note:</b> ${escapeHtml(bill.adminNote)}</p>` : ''}
             <div style="text-align:center;border-top:1px dashed #000;margin-top:8px;padding-top:6px;font-size:10px;opacity:.7;">
-                <p style="margin:2px 0;">Thank you for choosing True Eats!</p>
+                <p style="margin:2px 0;">Thank you for choosing Echo Chasing.</p>
                 <p style="margin:2px 0;">Visit us again ♥</p>
             </div>
         </div>`;
@@ -576,7 +580,7 @@ const BulkPrintMode = () => {
         if (exists) {
             setSelected(selected.filter(x => x._id !== o._id));
         } else {
-            if (selected.length >= 6) return alert('Maximum 6 orders can be printed at once');
+            if (selected.length >= 4) return alert('Maximum 4 orders can be printed on one A4 sheet');
             setSelected([...selected, o]);
         }
     };
