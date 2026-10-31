@@ -15,8 +15,7 @@ const contactRoutes = require('./routes/contactRoutes');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const returnRoutes = require('./routes/returnRoutes');
 
-// 2. Connect to Database
-connectDB();
+// Connect to persistent storage before accepting requests.
 
 const app = express();
 const path = require('path');
@@ -89,6 +88,15 @@ app.use((err, req, res, next) => {
 
 // 6. START SERVER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+const startServer = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Server startup aborted:', error.message);
+        process.exit(1);
+    }
+};
+startServer();
