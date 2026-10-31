@@ -36,7 +36,24 @@ const getEligibleUserDiscount = async (userId) => {
 
 exports.getSettings = async (req, res) => {
     try {
-        res.json(await getOrCreate());
+        const settings = await getOrCreate();
+        // Never expose private coupons or restricted-customer records to storefront visitors.
+        if (req.user?.role === 'admin') return res.json(settings);
+        return res.json({
+            deliveryFee: settings.deliveryFee,
+            minOrderValue: settings.minOrderValue,
+            platformFee: settings.platformFee,
+            gstPercent: settings.gstPercent,
+            gstEnabled: settings.gstEnabled,
+            freeDeliveryAbove: settings.freeDeliveryAbove,
+            freeDeliveryEnabled: settings.freeDeliveryEnabled,
+            orderingEnabled: settings.orderingEnabled,
+            codEnabled: settings.codEnabled,
+            newUserDiscountEnabled: settings.newUserDiscountEnabled,
+            newUserDiscount: settings.newUserDiscount,
+            coupons: settings.coupons,
+            announcements: settings.announcements,
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -66,8 +83,7 @@ exports.validateCoupon = async (req, res) => {
         if (!code) return res.status(400).json({ message: 'No code provided' });
 
         const settings = await getOrCreate();
-        const allCoupons = [...(settings.coupons || []), ...(settings.hiddenCoupons || [])];
-        const coupon = allCoupons.find((entry) => entry.code === code.toUpperCase().trim());
+        const coupon = (settings.coupons || []).find((entry) => entry.code === code.toUpperCase().trim());
 
         if (!coupon) return res.status(404).json({ message: 'Invalid coupon code' });
 
