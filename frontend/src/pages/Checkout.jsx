@@ -285,20 +285,20 @@ const Checkout = () => {
 
     const handlePay = () => {
         if (checkoutInProgress.current) return;
-        if (!/^\\d{10}$/.test(String(address.phone).replace(/\\D/g, ''))) {
-            alert('Enter a valid 10-digit mobile number.');
+        const phoneDigits = String(address.phone || '').replace(/\D/g, '');
+        const normalizedPhone = phoneDigits.length === 12 && phoneDigits.startsWith('91')
+            ? phoneDigits.slice(2)
+            : phoneDigits;
+        if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+            alert('Enter a valid 10-digit Indian mobile number (with or without +91).');
             return;
         }
-        if (!/^[1-9]\\d{5}$/.test(String(address.pincode).trim())) {
+        if (!/^[1-9]\d{5}$/.test(String(address.pincode).trim())) {
             alert('Enter a valid 6-digit PIN code.');
             return;
         }
         if (!address.firstName.trim() || !address.lastName.trim() || !address.state.trim()) {
             alert('Please complete your name and state.');
-            return;
-        }
-        if (!address.phone) {
-            alert('Please enter your phone number in the Contact section.');
             return;
         }
         if (!address.colony || !address.city || !address.pincode) {
