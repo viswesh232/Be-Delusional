@@ -532,26 +532,46 @@ exports.getMyOrders = async (req, res) => {
 // ── 6. UPDATE ORDER STATUS (Admin) ──────────────────────────────────────────
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        const allowedStatuses = ['Placed', 'Processing', 'Packed', 'Preparing', 'Shipped', 'Delivered', 'Cancelled'];
-        if (!allowedStatuses.includes(req.body.status)) {
+        const allowedTransitions = {
+            Placed: ['Processing'],
+            Processing: ['Packed', 'Preparing'],
+            Packed: ['Preparing'],
+            Preparing: ['Shipped'],
+            Shipped: ['Delivered'],
+        };
+        const requestedStatus = req.body.status;
+        if (requestedStatus === 'Cancelled') {
+            return res.status(409).json({
+                message: 'Use the dedicated cancellation and refund workflow. Direct status cancellation is disabled to protect inventory and payments.',
+            });
+        }
+        if (!Object.values(allowedTransitions).flat().includes(requestedStatus)) {
             return res.status(400).json({ message: 'Invalid order status' });
         }
-        if (['Cancelled', 'Returned', 'Exchanged', 'Return Requested', 'Exchange Requested'].includes(order.status)) {
-            return res.status(409).json({ message: 'This order is in a final state and cannot be changed here' });
-        }
-        order.status = req.body.status;
 
-        if (req.body.status === 'Delivered') {
-            order.completedAt = new Date();
-        } else {
-            order.completedAt = null;
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        if (order.paymentStatus !== 'Paid' && order.paymentMethod !== 'COD') {
+            return res.status(409).json({ message: 'Payment must be verified before fulfilment can begin' });
+        }
+        const nextStatuses = allowedTransitions[order.status] || [];
+        if (!nextStatuses.includes(requestedStatus)) {
+            return res.status(409).json({ message: `Cannot move an order from ${order.status} to ${requestedStatus}` });
         }
 
-        await order.save();
-        res.json(order);
+        const updated = await Order.findOneAndUpdate(
+            { _id: order._id, status: order.status },
+            {
+                $set: {
+                    status: requestedStatus,
+                    completedAt: requestedStatus === 'Delivered' ? new Date() : null,
+                    shippedAt: requestedStatus === 'Shipped' ? new Date() : order.shippedAt,
+                },
+            },
+            { new: true }
+        );
+        if (!updated) return res.status(409).json({ message: 'Order changed while this update was being saved. Refresh and try again.' });
+        res.json(updated);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
