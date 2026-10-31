@@ -244,7 +244,7 @@ exports.updateProduct = async (req, res) => {
                 const filePaths = req.files.map(f => `/uploads/${f.filename}`);
                 images = [...images, ...filePaths];
             }
-            if (images.length > 0) {
+            if (req.body.replaceImages === 'true' || images.length > 0) {
                 product.images = images;
             }
         }
