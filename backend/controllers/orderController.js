@@ -807,6 +807,16 @@ exports.userCancelOrder = async (req, res) => {
             return res.status(409).json({ message: 'This order can no longer be cancelled' });
         }
 
+        // Never mark a captured online order cancelled without a verified refund.
+        // The current customer cancellation route does not initiate a Razorpay refund.
+        if (order.paymentMethod === 'Online' && order.paymentStatus === 'Paid') {
+            // Restore the previous state so the customer can still receive the order.
+            await Order.updateOne({ _id: order._id, status: 'Cancelled' }, { $set: { status: order.status } });
+            return res.status(409).json({
+                message: 'This online payment has already been captured. Contact support to arrange cancellation and a verified refund.',
+            });
+        }
+
         // Restore the exact size + colour variant after the state transition succeeds.
         for (const item of order.orderItems) {
             if (!item.size || item.size === 'Standard') continue;
