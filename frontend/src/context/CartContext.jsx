@@ -45,7 +45,7 @@ export const normalizeCartItem = (product) => {
 
 export const CartProvider = ({ children }) => {
     const [cartItems, setCartItems] = useState(() => {
-        const savedCart = localStorage.getItem('trueThreadsCart') || localStorage.getItem('trueEatsCart');
+        const savedCart = localStorage.getItem('echoChasingCart') || localStorage.getItem('trueThreadsCart') || localStorage.getItem('trueEatsCart');
         if (savedCart) {
             try {
                 return JSON.parse(savedCart).map(normalizeCartItem);
@@ -57,7 +57,7 @@ export const CartProvider = ({ children }) => {
     });
 
     useEffect(() => {
-        localStorage.setItem('trueThreadsCart', JSON.stringify(cartItems));
+        localStorage.setItem('echoChasingCart', JSON.stringify(cartItems));
     }, [cartItems]);
 
     const addToCart = (product, qtyToAdd = 1, options = {}) => {
