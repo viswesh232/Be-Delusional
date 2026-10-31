@@ -35,6 +35,7 @@ const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric
 export default function Orders() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [filter, setFilter] = useState('all');
     const navigate = useNavigate();
 
@@ -49,9 +50,10 @@ export default function Orders() {
 
     const fetchOrders = () => {
         setLoading(true);
+        setLoadError('');
         API.get('/orders/myorders')
-            .then(({ data }) => setOrders(data))
-            .catch(console.error)
+            .then(({ data }) => setOrders(Array.isArray(data) ? data : []))
+            .catch((err) => setLoadError(err.response?.data?.message || 'We could not load your orders. Please try again.'))
             .finally(() => setLoading(false));
     };
 
@@ -103,7 +105,7 @@ export default function Orders() {
             : orders.filter(o => o.status === filter);
 
     return (
-        <div style={{ backgroundColor: '#f8fafc', minHeight: '100vh', fontFamily: 'inherit', padding: '40px 20px 80px' }}>
+        <div style={{ backgroundColor: '#F4F1EB', minHeight: '100vh', fontFamily: 'inherit', padding: 'clamp(20px, 4vw, 44px) 16px 80px' }}>
             <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
@@ -118,7 +120,7 @@ export default function Orders() {
                         >
                             <ArrowLeft size={16} /> Back to Store
                         </button>
-                        <h1 style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#09090b', letterSpacing: '-0.5px' }}>
+                        <h1 style={{ margin: 0, fontSize: 'clamp(24px, 4vw, 34px)', fontWeight: '700', color: '#171714', letterSpacing: '-1px' }}>
                             My Orders & Exchanges
                         </h1>
                     </div>
@@ -142,10 +144,15 @@ export default function Orders() {
                 </div>
 
                 {loading ? (
-                    <div style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>Loading your orders...</div>
+                    <div style={{ textAlign: 'center', padding: '60px', color: '#77766f' }}>Loading your orders...</div>
+                ) : loadError ? (
+                    <div style={{ background: '#FBFAF7', border: '1px solid #D8D2C8', padding: '36px 20px', textAlign: 'center' }}>
+                        <p style={{ color: '#171714', marginBottom: '16px' }}>{loadError}</p>
+                        <button onClick={fetchOrders} style={{ padding: '10px 18px', background: '#171714', color: '#FBFAF7', border: 0, cursor: 'pointer' }}>Try again</button>
+                    </div>
                 ) : filtered.length === 0 ? (
                     <div style={{
-                        background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0',
+                        background: '#FBFAF7', borderRadius: '4px', border: '1px solid #D8D2C8',
                         padding: '60px 20px', textAlign: 'center'
                     }}>
                         <ShoppingBag size={40} color="#94a3b8" style={{ margin: '0 auto 16px' }} />
@@ -171,12 +178,12 @@ export default function Orders() {
 
                             return (
                                 <div key={order._id} style={{
-                                    background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.02)', overflow: 'hidden'
+                                    background: '#FBFAF7', borderRadius: '4px', border: '1px solid #D8D2C8',
+                                    boxShadow: 'none', overflow: 'hidden'
                                 }}>
                                     {/* Order Top Bar */}
                                     <div style={{
-                                        padding: '16px 20px', background: '#fafafa', borderBottom: '1px solid #f1f5f9',
+                                        padding: '16px 20px', background: '#F4F1EB', borderBottom: '1px solid #D8D2C8',
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px'
                                     }}>
                                         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
@@ -242,7 +249,7 @@ export default function Orders() {
                                                             padding: '8px 14px', fontSize: '13px', fontWeight: '700', color: '#09090b', cursor: 'pointer'
                                                         }}
                                                     >
-                                                        <RefreshCw size={14} /> Exchange Size
+                                                        <RefreshCw size={14} /> Return / Exchange
                                                     </button>
                                                 )}
                                             </div>
@@ -258,10 +265,10 @@ export default function Orders() {
 
                                     {/* Order Footer */}
                                     <div style={{
-                                        padding: '14px 20px', background: '#fafafa', borderTop: '1px solid #f1f5f9',
+                                        padding: '14px 20px', background: '#F4F1EB', borderTop: '1px solid #D8D2C8',
                                         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px'
                                     }}>
-                                        <div style={{ fontSize: '14px', color: '#64748b' }}>
+                                        <div style={{ fontSize: '14px', color: '#77766f' }}>
                                             Total: <strong style={{ color: '#09090b', fontSize: '16px' }}>{fmt(order.totalPrice)}</strong>
                                         </div>
 
