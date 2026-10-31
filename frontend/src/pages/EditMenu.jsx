@@ -60,6 +60,11 @@ export default function EditMenu() {
 
     const [urlImages, setUrlImages] = useState(['']);
     const [fileImages, setFileImages] = useState([]);
+    const [filePreviews, setFilePreviews] = useState([]);
+
+    useEffect(() => () => {
+        filePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [filePreviews]);
 
     const fetchProducts = async () => {
         try {
@@ -123,6 +128,7 @@ export default function EditMenu() {
         });
         setUrlImages(['']);
         setFileImages([]);
+        setFilePreviews([]);
         setEditingId(null);
     };
 
@@ -166,6 +172,7 @@ export default function EditMenu() {
 
         setUrlImages(p.images && p.images.length > 0 ? p.images : ['']);
         setFileImages([]);
+        setFilePreviews([]);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -489,8 +496,32 @@ export default function EditMenu() {
                                 }}>
                                     <Upload size={16} /> Upload Photos from Computer
                                     <input 
-                                        type="file" multiple accept="image/*" style={{ display: 'none' }}
-                                        onChange={e => setFileImages(Array.from(e.target.files))}
+                                        type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" style={{ display: 'none' }}
+                                        onChange={e => {
+                                            const selected = Array.from(e.target.files || []);
+                                            const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                                            if (selected.some(file => !allowed.includes(file.type))) {
+                                                alert('Choose JPG, PNG, GIF or WEBP photos only.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            if (selected.some(file => file.size > 5 * 1024 * 1024)) {
+                                                alert('Each photo must be 5 MB or smaller.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            if (selected.length + fileImages.length > 20) {
+                                                alert('You can upload a maximum of 20 photos at a time.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            setFileImages(previous => [...previous, ...selected]);
+                                            setFilePreviews(previous => [...previous, ...selected.map(file => ({
+                                                name: file.name,
+                                                url: URL.createObjectURL(file)
+                                            }))]);
+                                            e.target.value = '';
+                                        }}
                                     />
                                 </label>
                                 {fileImages.length > 0 && (
@@ -499,6 +530,29 @@ export default function EditMenu() {
                                     </span>
                                 )}
                             </div>
+
+                            {(urlImages.some(url => url.trim()) || filePreviews.length > 0) && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                                    {urlImages.filter(url => url.trim()).map((url, index) => (
+                                        <div key={`url-${index}`} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                                            <img src={getImageUrl(url.trim())} alt={`Product preview ${index + 1}`} style={{ width: '100%', height: '120px', objectFit: 'cover' }} />
+                                            <div style={{ padding: '5px 7px', fontSize: '11px', color: '#64748b' }}>Image URL</div>
+                                        </div>
+                                    ))}
+                                    {filePreviews.map((preview, index) => (
+                                        <div key={`file-${index}-${preview.name}`} style={{ position: 'relative', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                                            <img src={preview.url} alt={preview.name} style={{ width: '100%', height: '120px', objectFit: 'cover' }} />
+                                            <button type="button" onClick={() => {
+                                                setFileImages(previous => previous.filter((_, fileIndex) => fileIndex !== index));
+                                                setFilePreviews(previous => previous.filter((_, previewIndex) => previewIndex !== index));
+                                            }} style={{ position: 'absolute', top: '5px', right: '5px', border: 0, borderRadius: '50%', width: '25px', height: '25px', background: '#fff', cursor: 'pointer' }} aria-label={`Remove ${preview.name}`}>
+                                                <X size={14} />
+                                            </button>
+                                            <div style={{ padding: '5px 7px', fontSize: '11px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.name}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Merchandising Badges */}
