@@ -231,6 +231,7 @@ exports.createRazorpayOrder = async (req, res) => {
             return res.status(400).json({ message: pricing.error });
         }
 
+        if (pricing.totalPrice <= 0) return res.status(400).json({ message: 'Payment amount must be greater than zero' });
         const receipt = `u${String(req.user._id)}_${crypto.randomUUID()}`;
         const options = {
             amount: Math.round(pricing.totalPrice * 100), // Razorpay in paise
@@ -351,6 +352,10 @@ exports.createOrder = async (req, res) => {
             }
             paymentStatus = 'Paid';
             paidAt = new Date();
+        }
+
+        if (paymentMethod === 'Online' && paymentStatus !== 'Paid') {
+            return res.status(400).json({ message: 'Online payment has not been captured' });
         }
 
         const orderId = await generateOrderId();
