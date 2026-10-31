@@ -104,7 +104,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     for (const item of requestedItems) {
         const product = productMap.get(item.productId);
         if (product && Array.isArray(product.variants) && product.variants.length > 0) {
-            const variant = product.variants.find(v => v.size === item.size && (item.color === 'Standard' || v.color === item.color));
+            const variant = product.variants.find(v => v.size === item.size && (v.color || 'Standard') === item.color);
             if (!variant) {
                 return { error: `Selected size (${item.size}) is unavailable for ${product.name}.` };
             }
@@ -123,7 +123,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
 
         // If variant has specific price override
         if (Array.isArray(product.variants)) {
-            const variant = product.variants.find(v => v.size === item.size && (item.color === 'Standard' || v.color === item.color));
+            const variant = product.variants.find(v => v.size === item.size && (v.color || 'Standard') === item.color);
             if (variant && variant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && variant.price !== product.price) {
                 finalPrice = variant.price;
             }
@@ -415,12 +415,11 @@ exports.createOrder = async (req, res) => {
         // The stock predicate prevents overselling when two customers check out together.
         for (const item of pricing.normalizedItems) {
             if (!item.size || item.size === 'Standard') continue;
-            const variantFilter = { size: item.size, stock: { $gte: item.qty } };
-            if (item.color && item.color !== 'Standard') variantFilter.color = item.color;
+            const variantFilter = { size: item.size, color: item.color || 'Standard', stock: { $gte: item.qty } };
             const reservation = await Product.updateOne(
                 { _id: item.product, variants: { $elemMatch: variantFilter } },
                 { $inc: { 'variants.$[variant].stock': -item.qty } },
-                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}), 'variant.stock': { $gte: item.qty } }] }
+                { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard', 'variant.stock': { $gte: item.qty } }] }
             );
             if (reservation.modifiedCount !== 1) {
                 throw new Error(`Insufficient stock for ${item.name} (${item.size}${item.color !== 'Standard' ? ` / ${item.color}` : ''}). Please refresh your cart.`);
@@ -785,12 +784,11 @@ exports.userCancelOrder = async (req, res) => {
         // Restore the exact size + colour variant after the state transition succeeds.
         for (const item of order.orderItems) {
             if (!item.size || item.size === 'Standard') continue;
-            const variantMatch = { size: item.size };
-            if (item.color && item.color !== 'Standard') variantMatch.color = item.color;
+            const variantMatch = { size: item.size, color: item.color || 'Standard' };
             await Product.updateOne(
                 { _id: item.product, variants: { $elemMatch: variantMatch } },
                 { $inc: { 'variants.$[variant].stock': item.qty } },
-                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}) }] }
+                { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard' }] }
             );
         }
 
