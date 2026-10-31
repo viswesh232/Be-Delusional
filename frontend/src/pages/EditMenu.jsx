@@ -219,9 +219,9 @@ export default function EditMenu() {
             fileImages.forEach(f => fd.append('images', f));
 
             if (editingId) {
-                await API.put(`/products/${editingId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.put(`/products/${editingId}`, fd, {});
             } else {
-                await API.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.post('/products', fd, {});
             }
 
             resetForm();
