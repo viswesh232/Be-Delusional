@@ -23,6 +23,9 @@ const returnRequestSchema = new mongoose.Schema({
     },
     adminNotes:     { type: String, default: '' },
     refundAmount:   { type: Number, default: 0 },
+    razorpayRefundId: { type: String, default: '' },
+    refundStatus:   { type: String, enum: ['Not Required', 'Pending', 'Processed', 'Failed'], default: 'Not Required' },
+    refundedAt:     { type: Date },
 }, { timestamps: true });
 
 // One request per purchased product in an order. Prevents concurrent duplicate submissions.
