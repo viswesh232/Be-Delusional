@@ -10,6 +10,7 @@ const {
 } = require('../controllers/productController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
+router.get('/admin/all',   protect, admin, getProducts);
 router.get('/',           getProducts);
 router.get('/:idOrSlug',  getProductByIdOrSlug);
 router.post('/',          protect, admin, upload.array('images', 20), createProduct);
