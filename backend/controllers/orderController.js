@@ -221,6 +221,9 @@ exports.createRazorpayOrder = async (req, res) => {
             return res.status(403).json({ message: 'Your account is restricted from placing orders' });
         }
 
+        if (!Array.isArray(req.body.orderItems) || req.body.orderItems.length === 0 || req.body.orderItems.length > 50) {
+            return res.status(400).json({ message: 'Cart is empty or contains too many line items' });
+        }
         const pricing = await calculateOrderPricing({
             orderItems: req.body.orderItems,
             couponCode: req.body.couponCode,
@@ -294,6 +297,9 @@ exports.createOrder = async (req, res) => {
             return res.status(403).json({ message: 'Your account is restricted from placing orders' });
         }
 
+        if (!Array.isArray(orderItems) || orderItems.length === 0 || orderItems.length > 50) {
+            return res.status(400).json({ message: 'Cart is empty or contains too many line items' });
+        }
         const pricing = await calculateOrderPricing({
             orderItems,
             couponCode,
@@ -358,7 +364,10 @@ exports.createOrder = async (req, res) => {
             // A captured payment/order pair is single-use. Reject replay attempts,
             // including requests from the same customer after a successful checkout.
             const paymentAlreadyUsed = await Order.exists({
-                $or: [{ razorpayPaymentId }, { razorpayOrderId }],
+                $or: [
+                    { razorpayPaymentId },
+                    { razorpayOrderId },
+                ],
             });
             if (paymentAlreadyUsed) {
                 return res.status(409).json({ message: 'This payment has already been used for an order' });
