@@ -591,6 +591,12 @@ exports.updateDeliveryInfo = async (req, res) => {
         if (['Cancelled', 'Returned', 'Exchanged', 'Return Requested', 'Exchange Requested'].includes(order.status)) {
             return res.status(409).json({ message: 'Delivery cannot be updated for this order status' });
         }
+        if (order.paymentMethod !== 'COD' && order.paymentStatus !== 'Paid') {
+            return res.status(409).json({ message: 'Payment must be verified before dispatch' });
+        }
+        if (!['Preparing', 'Shipped'].includes(order.status)) {
+            return res.status(409).json({ message: 'Order must pass packing and quality checks before dispatch' });
+        }
 
         order.trackingId  = trackingId || order.trackingId;
         order.courierName = courierName || 'Express Courier';
