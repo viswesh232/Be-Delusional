@@ -9,6 +9,9 @@ const generateToken = require('../utils/generateToken');
 exports.registerUser = async (req, res) => {
   try {
     const { firstName, lastName, email, password, phoneNumber, altPhoneNumber, address } = req.body;
+    if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 12 || !phoneNumber?.trim()) {
+      return res.status(400).json({ message: 'Provide valid name, email, phone number and a password of at least 12 characters.' });
+    }
 
     // 1. Check if user already exists
     const userExists = await User.findOne({ email });
@@ -27,7 +30,7 @@ exports.registerUser = async (req, res) => {
     const user = await User.create({
       firstName,
       lastName,
-      email,
+      email: String(email).trim().toLowerCase(),
       password: hashedPassword,
       phoneNumber,
       altPhoneNumber,
@@ -85,9 +88,12 @@ exports.verifyEmail = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' });
+    }
 
     // 1. Find user by email
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
 
     if (user) {
       // 2. Check if Email is Verified (Crucial Security Step)
@@ -214,8 +220,8 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Validate that a new password was actually provided
-    if (!req.body.password || req.body.password.trim().length === 0) {
-      return res.status(400).json({ message: 'Password cannot be empty' });
+    if (typeof req.body.password !== 'string' || req.body.password.length < 12) {
+      return res.status(400).json({ message: 'Password must be at least 12 characters long' });
     }
 
     // Hash the new password and save
