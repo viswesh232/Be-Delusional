@@ -130,13 +130,17 @@ export default function EditMenu() {
         setEditingId(p._id);
         const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL', 'XXL'];
         const stockMap = {};
+        const selectedColor = p.colors?.[0]?.name || p.variants?.[0]?.color || 'Black';
         if (Array.isArray(p.variants)) {
-            p.variants.forEach(v => {
-                stockMap[v.size] = v.stock;
-            });
-        } else {
-            sizes.forEach(s => stockMap[s] = 0);
+            p.variants
+                .filter(v => (v.color || 'Standard') === selectedColor)
+                .forEach(v => {
+                    stockMap[v.size] = v.stock;
+                });
         }
+        sizes.forEach(size => {
+            if (stockMap[size] === undefined) stockMap[size] = 0;
+        });
 
         setFormData({
             name: p.name || '',
@@ -155,8 +159,8 @@ export default function EditMenu() {
             isNewDrop: p.isNewDrop ?? false,
             isBestseller: p.isBestseller ?? false,
             selectedSizes: sizes,
-            colorName: p.colors?.[0]?.name || 'Black',
-            colorHex: p.colors?.[0]?.hex || '#09090b',
+            colorName: selectedColor,
+            colorHex: p.colors?.find(color => color.name === selectedColor)?.hex || p.variants?.find(v => v.color === selectedColor)?.colorHex || '#09090b',
             stockPerSize: stockMap
         });
 
@@ -168,16 +172,27 @@ export default function EditMenu() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const variants = formData.selectedSizes.map(size => ({
-                sku: `${formData.name.substring(0, 3).toUpperCase()}-${size}`,
+            const editedColorVariants = formData.selectedSizes.map(size => ({
+                sku: `${formData.name.substring(0, 3).toUpperCase()}-${formData.colorName.substring(0, 3).toUpperCase()}-${size}`,
                 size,
                 color: formData.colorName,
                 colorHex: formData.colorHex,
-                stock: formData.stockPerSize[size] ?? 0,
+                stock: Math.max(0, Number(formData.stockPerSize[size]) || 0),
                 price: undefined
             }));
+            // This form edits one colour at a time. Preserve every other colour's
+            // variants so saving a product cannot silently erase their inventory.
+            const preservedVariants = editingId
+                ? (products.find(product => product._id === editingId)?.variants || [])
+                    .filter(variant => (variant.color || 'Standard') !== formData.colorName)
+                : [];
+            const variants = [...preservedVariants, ...editedColorVariants];
 
-            const colors = [{ name: formData.colorName, hex: formData.colorHex }];
+            const existingColors = editingId
+                ? (products.find(product => product._id === editingId)?.colors || [])
+                    .filter(color => color.name !== formData.colorName)
+                : [];
+            const colors = [...existingColors, { name: formData.colorName, hex: formData.colorHex }];
 
             const fd = new FormData();
             fd.append('name', formData.name);
