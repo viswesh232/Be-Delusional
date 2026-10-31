@@ -5,7 +5,7 @@ const fs = require('fs');
 // Use an absolute path so uploads work regardless of the process working directory.
 // Render deployments need a persistent disk mounted at this location to retain files
 // across restarts and deployments.
-const uploadDirectory = path.join(__dirname, '..', 'uploads');
+const uploadDirectory = process.env.UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 fs.mkdirSync(uploadDirectory, { recursive: true });
 
 const storage = multer.diskStorage({
