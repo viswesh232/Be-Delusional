@@ -104,7 +104,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     for (const item of requestedItems) {
         const product = productMap.get(item.productId);
         if (product && Array.isArray(product.variants) && product.variants.length > 0) {
-            const variant = product.variants.find(v => v.size === item.size && (v.color === item.color || item.color === 'Standard'));
+            const variant = product.variants.find(v => v.size === item.size && (item.color === 'Standard' || v.color === item.color));
             if (!variant) {
                 return { error: `Selected size (${item.size}) is unavailable for ${product.name}.` };
             }
@@ -123,7 +123,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
 
         // If variant has specific price override
         if (Array.isArray(product.variants)) {
-            const variant = product.variants.find(v => v.size === item.size);
+            const variant = product.variants.find(v => v.size === item.size && (item.color === 'Standard' || v.color === item.color));
             if (variant && variant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && variant.price !== product.price) {
                 finalPrice = variant.price;
             }
@@ -253,6 +253,7 @@ exports.createRazorpayOrder = async (req, res) => {
 
 // ── 2. PLACE ORDER ───────────────────────────────────────────────────────────
 exports.createOrder = async (req, res) => {
+    const reservedStock = [];
     try {
         const {
             orderItems, shippingAddress,
@@ -313,12 +314,28 @@ exports.createOrder = async (req, res) => {
                 .update(body)
                 .digest('hex');
 
-            if (expectedSignature === razorpaySignature) {
-                paymentStatus = 'Paid';
-                paidAt = new Date();
-            } else {
+            const signatureBuffer = Buffer.from(expectedSignature);
+            const suppliedBuffer = Buffer.from(String(razorpaySignature));
+            if (signatureBuffer.length !== suppliedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, suppliedBuffer)) {
                 return res.status(400).json({ message: 'Payment verification failed. Order not placed.' });
             }
+
+            const Razorpay = require('razorpay');
+            const razorpay = new Razorpay({
+                key_id: process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID,
+                key_secret: razorpaySecret,
+            });
+            const verifiedPayment = await razorpay.payments.fetch(razorpayPaymentId);
+            if (
+                verifiedPayment.order_id !== razorpayOrderId ||
+                verifiedPayment.currency !== 'INR' ||
+                verifiedPayment.amount !== Math.round(pricing.totalPrice * 100) ||
+                !['authorized', 'captured'].includes(verifiedPayment.status)
+            ) {
+                return res.status(400).json({ message: 'Payment details do not match this order.' });
+            }
+            paymentStatus = 'Paid';
+            paidAt = new Date();
         }
 
         const orderId = await generateOrderId();
@@ -342,17 +359,24 @@ exports.createOrder = async (req, res) => {
             paidAt,
         });
 
-        const createdOrder = await order.save();
-
-        // Atomically decrement stock for apparel variants
+        // Reserve each selected variant atomically before creating the order.
+        // The stock predicate prevents overselling when two customers check out together.
         for (const item of pricing.normalizedItems) {
-            if (item.size && item.size !== 'Standard') {
-                await Product.updateOne(
-                    { _id: item.product, 'variants.size': item.size },
-                    { $inc: { 'variants.$.stock': -item.qty } }
-                );
+            if (!item.size || item.size === 'Standard') continue;
+            const variantFilter = { size: item.size, stock: { $gte: item.qty } };
+            if (item.color && item.color !== 'Standard') variantFilter.color = item.color;
+            const reservation = await Product.updateOne(
+                { _id: item.product, variants: { $elemMatch: variantFilter } },
+                { $inc: { 'variants.$[variant].stock': -item.qty } },
+                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}), 'variant.stock': { $gte: item.qty } }] }
+            );
+            if (reservation.modifiedCount !== 1) {
+                throw new Error(`Insufficient stock for ${item.name} (${item.size}${item.color !== 'Standard' ? ` / ${item.color}` : ''}). Please refresh your cart.`);
             }
+            reservedStock.push({ product: item.product, size: item.size, color: item.color, qty: item.qty });
         }
+
+        const createdOrder = await order.save();
 
         const normalizedAddress = addressInfo || {
             firstName: req.user?.firstName || '',
@@ -385,8 +409,16 @@ exports.createOrder = async (req, res) => {
 
         res.status(201).json(createdOrder);
     } catch (error) {
+        // Compensate any stock reservations if order creation/address persistence failed.
+        for (const item of reservedStock.reverse()) {
+            const filter = { _id: item.product, 'variants.size': item.size };
+            if (item.color && item.color !== 'Standard') filter['variants.color'] = item.color;
+            await Product.updateOne(filter, {
+                $inc: { 'variants.$.stock': item.qty },
+            }).catch((rollbackError) => console.error('Stock rollback failed:', rollbackError));
+        }
         console.error('Create order error:', error);
-        res.status(500).json({ message: error.message });
+        res.status(400).json({ message: error.message || 'Unable to place order' });
     }
 };
 
