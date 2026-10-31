@@ -268,8 +268,11 @@ exports.createOrder = async (req, res) => {
         if (!orderItems || orderItems.length === 0) {
             return res.status(400).json({ message: 'No order items' });
         }
-        if (!shippingAddress) {
-            return res.status(400).json({ message: 'Shipping address is required' });
+        if (typeof shippingAddress !== 'string' || !shippingAddress.trim() || shippingAddress.length > 2000) {
+            return res.status(400).json({ message: 'A valid shipping address is required' });
+        }
+        if (typeof customNote === 'string' && customNote.length > 500) {
+            return res.status(400).json({ message: 'Order note is too long' });
         }
         if (!['COD', 'Online'].includes(paymentMethod)) {
             return res.status(400).json({ message: 'Invalid payment method' });
