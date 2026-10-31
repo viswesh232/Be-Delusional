@@ -122,7 +122,7 @@ exports.loginUser = async (req, res) => {
 // @route   GET /api/auth/profile
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user._id).select('firstName lastName email phoneNumber altPhoneNumber address role isVerified createdAt');
     if (user) {
       res.json(user);
     } else {
@@ -157,7 +157,7 @@ exports.updateUserProfile = async (req, res) => {
       }
 
       const updatedUser = await user.save();
-      res.json({ message: 'Profile updated successfully', user: updatedUser });
+      res.json({ message: 'Profile updated successfully', user: { _id: updatedUser._id, firstName: updatedUser.firstName, lastName: updatedUser.lastName, email: updatedUser.email, phoneNumber: updatedUser.phoneNumber, altPhoneNumber: updatedUser.altPhoneNumber, address: updatedUser.address, role: updatedUser.role, isVerified: updatedUser.isVerified } });
     } else {
       res.status(404).json({ message: 'User not found' });
     }
