@@ -112,7 +112,7 @@ exports.loginUser = async (req, res) => {
           firstName: user.firstName,
           email: user.email,
           role: user.role, // This tells React if they are Admin or Customer
-          token: generateToken(user._id, user.role),
+          token: generateToken(user._id, user.role, user.tokenVersion || 0),
         });
       } else {
         res.status(401).json({ message: "Invalid email or password" });
