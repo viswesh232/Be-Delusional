@@ -1,5 +1,6 @@
 const ReturnRequest = require('../models/ReturnRequest');
 const Order = require('../models/Order');
+const Razorpay = require('razorpay');
 
 // @desc  Get all returns & exchanges (Admin)
 // @route GET /api/returns
@@ -45,7 +46,7 @@ exports.updateReturnStatus = async (req, res) => {
 
         const order = await Order.findById(returnReq.order);
         if (!order) return res.status(404).json({ message: 'Associated order not found' });
-        if (status === 'Completed' && returnReq.type === 'return' && order.paymentMethod === 'Online' && order.paymentStatus !== 'Refunded') {
+        if (status === 'Completed' && returnReq.type === 'return' && order.paymentMethod === 'Online' && returnReq.refundStatus !== 'Processed') {
             return res.status(409).json({ message: 'Complete the verified refund before closing this return' });
         }
 
@@ -70,5 +71,68 @@ exports.updateReturnStatus = async (req, res) => {
         res.json({ message: 'Return request updated', returnRequest: returnReq });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+
+};
+
+// @desc Create and verify a Razorpay refund for an approved return (Admin)
+// @route POST /api/returns/:id/refund
+exports.refundReturn = async (req, res) => {
+    try {
+        const returnReq = await ReturnRequest.findById(req.params.id);
+        if (!returnReq) return res.status(404).json({ message: 'Return request not found' });
+        if (returnReq.type !== 'return') return res.status(400).json({ message: 'Only return requests can be refunded' });
+        if (!['Approved', 'Pickup Scheduled', 'Inspected'].includes(returnReq.status)) {
+            return res.status(409).json({ message: 'The return must be approved and inspected before refund' });
+        }
+        if (returnReq.refundStatus === 'Processed') {
+            return res.status(409).json({ message: 'This return has already been refunded' });
+        }
+        const order = await Order.findById(returnReq.order);
+        if (!order) return res.status(404).json({ message: 'Associated order not found' });
+        if (order.paymentMethod !== 'Online' || order.paymentStatus !== 'Paid' || !order.razorpayPaymentId) {
+            return res.status(409).json({ message: 'A captured online payment is required for refund' });
+        }
+        const amountPaise = Math.round(Number(returnReq.refundAmount) * 100);
+        if (!Number.isSafeInteger(amountPaise) || amountPaise <= 0) {
+            return res.status(400).json({ message: 'Refund amount is invalid' });
+        }
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        if (!keyId || !keySecret) return res.status(503).json({ message: 'Payment refund is not configured' });
+        const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+
+        // Reuse an existing refund identifier on retries; never issue a second refund.
+        let refund;
+        if (returnReq.razorpayRefundId) {
+            refund = await razorpay.payments.fetchRefund(returnReq.razorpayPaymentId, returnReq.razorpayRefundId);
+        } else {
+            refund = await razorpay.payments.refund(order.razorpayPaymentId, {
+                amount: amountPaise,
+                notes: { returnRequestId: String(returnReq._id), orderId: String(order._id) },
+            });
+            returnReq.razorpayRefundId = refund.id;
+            returnReq.refundStatus = 'Pending';
+            await returnReq.save();
+        }
+
+        if (refund.status === 'processed') {
+            returnReq.refundStatus = 'Processed';
+            returnReq.refundedAt = new Date();
+            await returnReq.save();
+            const totalRefunded = await ReturnRequest.aggregate([
+                { $match: { order: order._id, refundStatus: 'Processed' } },
+                { $group: { _id: null, amount: { $sum: '$refundAmount' } } },
+            ]);
+            if ((totalRefunded[0]?.amount || 0) >= Number(order.totalPrice)) {
+                order.paymentStatus = 'Refunded';
+                order.returnDetails.status = 'Refunded';
+                await order.save();
+            }
+        }
+        return res.json({ message: 'Refund status checked with Razorpay', refundStatus: returnReq.refundStatus, refundId: returnReq.razorpayRefundId });
+    } catch (error) {
+        console.error('Return refund failed:', error);
+        return res.status(502).json({ message: 'Unable to process or verify refund with Razorpay' });
     }
 };
