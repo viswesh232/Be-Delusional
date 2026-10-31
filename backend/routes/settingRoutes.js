@@ -1,11 +1,12 @@
 const express = require('express');
 const router  = express.Router();
 const {
-    getSettings, updateSettings, validateCoupon,
+    getSettings, getAdminSettings, updateSettings, validateCoupon,
     getPublicCoupons, getUserDiscount, sendCouponToUser, sendMailToUser,
 } = require('../controllers/settingsController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
+router.get('/admin',                protect, admin, getAdminSettings);
 router.get('/',                     getSettings);
 router.get('/user-discount/:userId', protect,        getUserDiscount);
 router.put('/',                     protect, admin, updateSettings);
