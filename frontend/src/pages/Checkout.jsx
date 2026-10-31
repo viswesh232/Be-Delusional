@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
@@ -42,6 +42,7 @@ const Checkout = () => {
     const [settings, setSettings] = useState(null);
     const [paymentMethod, setPaymentMethod] = useState('Online');
     const [loading, setLoading] = useState(false);
+    const checkoutInProgress = useRef(false);
     const [userDiscount, setUserDiscount] = useState(location.state?.userDiscount || null);
 
     // Initial state from Cart Drawer
@@ -191,10 +192,13 @@ const Checkout = () => {
     });
 
     const handleOnlinePayment = async () => {
+        if (checkoutInProgress.current) return;
+        checkoutInProgress.current = true;
         setLoading(true);
         const sdkLoaded = await loadRazorpay();
         if (!sdkLoaded || !window.Razorpay) {
             alert('Payment gateway could not be loaded. Disable ad blockers or choose Cash on Delivery.');
+            checkoutInProgress.current = false;
             setLoading(false); return;
         }
 
@@ -221,19 +225,22 @@ const Checkout = () => {
                             razorpaySignature: response.razorpay_signature,
                         });
                         const { data: order } = await API.post('/orders', payload);
+                        clearCart();
                         navigate('/payment-success', { state: { order, clearCart: true } });
                     } catch (err) {
+                        checkoutInProgress.current = false;
+                        setLoading(false);
                         navigate('/payment-success', {
-                            state: { failed: true, reason: `Payment succeeded but order placement failed. ID: ${response.razorpay_payment_id}. Contact support.` },
+                            state: { failed: true, paymentCaptured: true, paymentId: response.razorpay_payment_id, reason: `Payment succeeded but order placement needs assistance. Payment ID: ${response.razorpay_payment_id}. Please contact support; do not pay again.` },
                         });
                     }
                 },
-                modal: { ondismiss: () => setLoading(false) },
+                modal: { ondismiss: () => { checkoutInProgress.current = false; setLoading(false); } },
             };
 
             let rzp = new window.Razorpay(options);
             rzp.on('payment.failed', async (response) => {
-                rzp.close(); setLoading(false);
+                rzp.close(); checkoutInProgress.current = false; setLoading(false);
                 try {
                     await API.post('/orders/record-failed', buildOrderPayload({
                         razorpayOrderId: rzpOrder.razorpayOrderId, failureReason: response.error?.description || 'Payment Failed', paymentMethod: 'Online'
@@ -245,20 +252,38 @@ const Checkout = () => {
             rzp.open();
         } catch (err) {
             alert(`Could not start payment: ${err.response?.data?.message || err.message}`);
+            checkoutInProgress.current = false;
             setLoading(false);
         }
     };
 
     const handleCOD = async () => {
+        if (checkoutInProgress.current) return;
+        checkoutInProgress.current = true;
         setLoading(true);
         try {
             const { data: order } = await API.post('/orders', buildOrderPayload({ paymentMethod: 'COD' }));
+            clearCart();
             navigate('/payment-success', { state: { order, clearCart: true } });
         } catch (err) { alert(`Order failed: ${err.response?.data?.message || 'Server error'}`); }
+        checkoutInProgress.current = false;
         setLoading(false);
     };
 
     const handlePay = () => {
+        if (checkoutInProgress.current) return;
+        if (!/^\\d{10}$/.test(String(address.phone).replace(/\\D/g, ''))) {
+            alert('Enter a valid 10-digit mobile number.');
+            return;
+        }
+        if (!/^[1-9]\\d{5}$/.test(String(address.pincode).trim())) {
+            alert('Enter a valid 6-digit PIN code.');
+            return;
+        }
+        if (!address.firstName.trim() || !address.lastName.trim() || !address.state.trim()) {
+            alert('Please complete your name and state.');
+            return;
+        }
         if (!address.phone) {
             alert('Please enter your phone number in the Contact section.');
             return;
