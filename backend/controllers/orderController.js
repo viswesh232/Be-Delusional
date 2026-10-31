@@ -316,7 +316,7 @@ exports.createOrder = async (req, res) => {
         }
 
         if (paymentMethod !== 'COD' && razorpayPaymentId && razorpaySignature) {
-            const razorpaySecret = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
+            const razorpaySecret = process.env.RAZORPAY_KEY_SECRET;
             if (!razorpaySecret) {
                 return res.status(500).json({ message: 'Razorpay verification secret is not configured' });
             }
@@ -672,8 +672,16 @@ exports.getRevenueStats = async (req, res) => {
 exports.recordFailedPayment = async (req, res) => {
     try {
         const { orderItems, shippingAddress, couponCode, customNote, razorpayOrderId, paymentMethod } = req.body;
-        if (!orderItems || orderItems.length === 0) {
+        if (!Array.isArray(orderItems) || orderItems.length === 0) {
             return res.status(400).json({ message: 'No order items' });
+        }
+        if (typeof shippingAddress !== 'string' || !shippingAddress.trim() || shippingAddress.length > 2000) {
+            return res.status(400).json({ message: 'A valid shipping address is required' });
+        }
+        const storeSettings = await Settings.findById('global').select('orderingEnabled restrictedUsers');
+        if (storeSettings?.orderingEnabled === false) return res.status(403).json({ message: 'Ordering is currently disabled' });
+        if (storeSettings?.restrictedUsers?.some((entry) => entry.userId === String(req.user._id))) {
+            return res.status(403).json({ message: 'Your account is restricted from placing orders' });
         }
 
         const pricing = await calculateOrderPricing({ orderItems, couponCode, userId: req.user._id });
@@ -695,14 +703,14 @@ exports.recordFailedPayment = async (req, res) => {
             user:            req.user._id,
             orderId,
             orderItems:      items,
-            shippingAddress: shippingAddress || 'Address not provided',
+            shippingAddress,
             totalPrice,
             couponCode:      pricing.couponCode || '',
             couponDiscount:  pricing.couponDiscount || 0,
             userDiscount:    pricing.userDiscountAmount || 0,
             customNote:      customNote || '',
             status:          'Pending Payment',
-            paymentMethod:   paymentMethod || 'Online',
+            paymentMethod:   'Online',
             paymentStatus:   'Failed',
             razorpayOrderId: razorpayOrderId || '',
             razorpayPaymentId: '',
@@ -761,6 +769,15 @@ exports.userCancelOrder = async (req, res) => {
 exports.requestExchangeOrReturn = async (req, res) => {
     try {
         const { orderId, productId, type, requestedSize, reason, images } = req.body;
+        if (!orderId || !productId || !['return', 'exchange'].includes(type) || typeof reason !== 'string' || !reason.trim() || reason.length > 1000) {
+            return res.status(400).json({ message: 'Valid order, product, request type and reason are required' });
+        }
+        if (type === 'exchange' && (!requestedSize || requestedSize.length > 20)) {
+            return res.status(400).json({ message: 'A valid requested size is required for exchange' });
+        }
+        if (images !== undefined && (!Array.isArray(images) || images.length > 5 || images.some((url) => typeof url !== 'string' || !url.startsWith('/uploads/')))) {
+            return res.status(400).json({ message: 'Invalid return images' });
+        }
         const order = await Order.findOne({ _id: orderId, user: req.user._id });
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
@@ -772,6 +789,9 @@ exports.requestExchangeOrReturn = async (req, res) => {
         if (!orderItem) {
             return res.status(404).json({ message: 'Product not found in this order' });
         }
+
+        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id, status: { $nin: ['Rejected', 'Cancelled'] } });
+        if (existingRequest) return res.status(409).json({ message: 'A return or exchange request already exists for this item' });
 
         const returnRequest = new ReturnRequest({
             order: order._id,
