@@ -108,7 +108,7 @@ export default function ProductPage() {
     const currentPrice = hasDiscount ? product.discountPrice : product.price;
 
     const currentVariant = Array.isArray(product.variants) 
-        ? product.variants.find(v => v.size === selectedSize)
+        ? product.variants.find(v => v.size === selectedSize && (!selectedColor || v.color === selectedColor.name))
         : null;
     const currentStock = currentVariant ? Number(currentVariant.stock || 0) : Number(product.stock || 0);
     const isOutOfStock = currentStock <= 0 || product.isAvailable === false || product.isHidden === true;
@@ -338,7 +338,7 @@ export default function ProductPage() {
 
                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                 {(product.sizes && product.sizes.length > 0 ? product.sizes : ['S', 'M', 'L', 'XL']).map(s => {
-                                    const variant = product.variants?.find(v => v.size === s);
+                                    const variant = product.variants?.find(v => v.size === s && (!selectedColor || v.color === selectedColor.name));
                                     const outOfStock = variant && variant.stock <= 0;
                                     const isSelected = selectedSize === s;
 
