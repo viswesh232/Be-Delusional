@@ -19,6 +19,7 @@ export default function Home() {
   const navigate = useNavigate();
   const [product, setProduct] = useState(fallbackProduct);
   const [productLoaded, setProductLoaded] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -32,6 +33,7 @@ export default function Home() {
   }, []);
 
   const image = product.images?.[0] || product.image;
+  useEffect(() => { setImageFailed(false); }, [image]);
   const availableSizes = Array.isArray(product.sizes) ? product.sizes : fallbackProduct.sizes;
   const salePrice = product.discountPrice > 0 && product.discountPrice < product.price ? product.discountPrice : product.price;
   const openProduct = () => {
@@ -64,7 +66,7 @@ export default function Home() {
         <div className="ec-product-heading"><div><span className="ec-section-label">[ THE FIRST RELEASE ]</span><h2>PROJECT <i>001</i></h2></div><span className="ec-drop-tag">LIMITED FIRST DROP <span>↗</span></span></div>
         <div className="ec-product-grid">
           <button className="ec-product-visual" onClick={openProduct} aria-label="View Project 001">
-            {image ? <img src={getImageUrl(image)} alt="Project 001 oversized T-shirt" onError={e => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }} /> : <div className="ec-product-placeholder"><span>EC / 001</span><div className="ec-shirt-shape"><span>ECHO<br />CHASING</span></div><small>PRODUCT IMAGE WILL APPEAR HERE</small></div>}
+            {image && !imageFailed ? <img src={getImageUrl(image)} alt="Project 001 oversized T-shirt" onError={() => setImageFailed(true)} /> : <div className="ec-product-placeholder"><span>EC / 001</span><div className="ec-shirt-shape"><span>ECHO<br />CHASING</span></div><small>PRODUCT IMAGE WILL APPEAR HERE</small></div>}
             <span className="ec-image-stamp">DROP<br />NO. 001</span>
           </button>
           <div className="ec-product-info">
