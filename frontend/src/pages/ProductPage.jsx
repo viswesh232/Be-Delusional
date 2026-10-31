@@ -208,14 +208,42 @@ export default function ProductPage() {
                             backgroundColor: '#f4f4f5',
                             border: '1px solid #e5e7eb'
                         }}>
-                            <img 
-                                src={getImageUrl(images[activeImageIdx])} 
-                                alt={product.name}
+                            <img
+                                src={getImageUrl(images[activeImageIdx] || images[0])}
+                                alt={`${product.name} photo ${activeImageIdx + 1}`}
+                                onError={e => {
+                                    e.currentTarget.onerror = null;
+                                    e.currentTarget.src = 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800';
+                                }}
                                 style={{
                                     position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                                     objectFit: 'cover'
                                 }}
                             />
+
+                            {images.length > 1 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        aria-label="Previous product photo"
+                                        onClick={() => setActiveImageIdx(index => (index - 1 + images.length) % images.length)}
+                                        style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #e5e7eb', background: 'rgba(255,255,255,.92)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                                    >
+                                        <ChevronLeft size={20} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-label="Next product photo"
+                                        onClick={() => setActiveImageIdx(index => (index + 1) % images.length)}
+                                        style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', width: '40px', height: '40px', borderRadius: '50%', border: '1px solid #e5e7eb', background: 'rgba(255,255,255,.92)', cursor: 'pointer', display: 'grid', placeItems: 'center' }}
+                                    >
+                                        <ChevronRight size={20} />
+                                    </button>
+                                    <span style={{ position: 'absolute', left: '50%', bottom: '12px', transform: 'translateX(-50%)', padding: '5px 10px', borderRadius: '20px', background: 'rgba(9,9,11,.72)', color: '#fff', fontSize: '12px' }}>
+                                        {activeImageIdx + 1} / {images.length}
+                                    </span>
+                                </>
+                            )}
 
                             {/* Wishlist Button */}
                             <button
@@ -246,7 +274,7 @@ export default function ProductPage() {
                                             padding: 0, cursor: 'pointer', flexShrink: 0, background: '#f4f4f5'
                                         }}
                                     >
-                                        <img src={getImageUrl(img)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        <img src={getImageUrl(img)} alt={`View product photo ${idx + 1}`} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                     </button>
                                 ))}
                             </div>
