@@ -36,7 +36,20 @@ export default function ProductCard({ product }) {
     const handleQuickAdd = (e, size) => {
         e.stopPropagation();
         const sizeToAdd = size || selectedSize;
-        addToCart(product, 1, { size: sizeToAdd });
+        const variant = Array.isArray(product.variants)
+            ? product.variants.find(v => v.size === sizeToAdd && (!v.color || v.color === 'Standard' || v.color === (product.colors?.[0]?.name || 'Standard')))
+            : null;
+        const stock = variant ? Number(variant.stock || 0) : Number(product.stock || 0);
+        if (product.isAvailable === false || product.isHidden === true || stock <= 0) {
+            window.alert('This size is currently unavailable.');
+            return;
+        }
+        const result = addToCart(product, 1, { size: sizeToAdd });
+        if (!result?.added) {
+            window.alert(result?.reason || 'This item is unavailable.');
+            return;
+        }
+        if (result.limited) window.alert(`Only ${result.available} more item(s) could be added.`);
         setAddedToast(true);
         setTimeout(() => setAddedToast(false), 1800);
     };
