@@ -198,7 +198,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
 exports.createRazorpayOrder = async (req, res) => {
     try {
         const Razorpay = require('razorpay');
-        const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
+        const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
         const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
         if (!razorpayKeyId || !razorpayKeySecret) {
@@ -335,7 +335,7 @@ exports.createOrder = async (req, res) => {
 
             const Razorpay = require('razorpay');
             const razorpay = new Razorpay({
-                key_id: process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID,
+                key_id: process.env.RAZORPAY_KEY_ID,
                 key_secret: razorpaySecret,
             });
             const [verifiedPayment, verifiedRazorpayOrder] = await Promise.all([
