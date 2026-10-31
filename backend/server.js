@@ -50,7 +50,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 600,
 }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+const uploadDirectory = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadDirectory, {
     dotfiles: 'deny',
     index: false,
     maxAge: '1d',
