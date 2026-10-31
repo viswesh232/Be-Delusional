@@ -355,6 +355,14 @@ exports.createOrder = async (req, res) => {
             ) {
                 return res.status(400).json({ message: 'Payment details do not match this order.' });
             }
+            // A captured payment/order pair is single-use. Reject replay attempts,
+            // including requests from the same customer after a successful checkout.
+            const paymentAlreadyUsed = await Order.exists({
+                $or: [{ razorpayPaymentId }, { razorpayOrderId }],
+            });
+            if (paymentAlreadyUsed) {
+                return res.status(409).json({ message: 'This payment has already been used for an order' });
+            }
             paymentStatus = 'Paid';
             paidAt = new Date();
         }
