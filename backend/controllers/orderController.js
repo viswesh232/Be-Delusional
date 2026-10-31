@@ -789,43 +789,46 @@ exports.recordFailedPayment = async (req, res) => {
 // ── 12. USER CANCEL ORDER ────────────────────────────────────────────────────
 exports.userCancelOrder = async (req, res) => {
     try {
-        // Conditional transition makes cancellation idempotent: two requests cannot
-        // both restore the same inventory.
-        const order = await Order.findOneAndUpdate(
-            {
-                _id: req.params.id,
-                user: req.user._id,
-                status: { $nin: ['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'] },
-            },
-            { $set: { status: 'Cancelled' } },
-            { new: true }
-        );
-        if (!order) {
-            const existing = await Order.findById(req.params.id).select('user status');
-            if (!existing) return res.status(404).json({ message: 'Order not found' });
-            if (String(existing.user) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized' });
+        // Read and authorize before changing state. Captured online payments must
+        // go through a verified refund process; this endpoint does not refund.
+        const existing = await Order.findById(req.params.id).select('user status paymentMethod paymentStatus orderItems');
+        if (!existing) return res.status(404).json({ message: 'Order not found' });
+        if (String(existing.user) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized' });
+        if (['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'].includes(existing.status)) {
             return res.status(409).json({ message: 'This order can no longer be cancelled' });
         }
-
-        // Never mark a captured online order cancelled without a verified refund.
-        // The current customer cancellation route does not initiate a Razorpay refund.
-        if (order.paymentMethod === 'Online' && order.paymentStatus === 'Paid') {
-            // Restore the previous state so the customer can still receive the order.
-            await Order.updateOne({ _id: order._id, status: 'Cancelled' }, { $set: { status: order.status } });
+        if (existing.paymentMethod === 'Online' && existing.paymentStatus === 'Paid') {
             return res.status(409).json({
                 message: 'This online payment has already been captured. Contact support to arrange cancellation and a verified refund.',
             });
         }
 
-        // Restore the exact size + colour variant after the state transition succeeds.
+        // Compare-and-set makes cancellation idempotent under concurrent requests.
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                user: req.user._id,
+                status: existing.status,
+                paymentStatus: existing.paymentStatus,
+            },
+            { $set: { status: 'Cancelled' } },
+            { new: true }
+        );
+        if (!order) return res.status(409).json({ message: 'Order changed while cancellation was being processed. Refresh and try again.' });
+
+        // Restore the exact size + colour variant only after the state transition wins.
         for (const item of order.orderItems) {
             if (!item.size || item.size === 'Standard') continue;
             const variantMatch = { size: item.size, color: item.color || 'Standard' };
-            await Product.updateOne(
+            const restored = await Product.updateOne(
                 { _id: item.product, variants: { $elemMatch: variantMatch } },
                 { $inc: { 'variants.$[variant].stock': item.qty } },
                 { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard' }] }
             );
+            if (restored.modifiedCount !== 1) {
+                console.error('Inventory restoration needs reconciliation for cancelled order:', order._id, item.product, item.size, item.color);
+                return res.status(500).json({ message: 'Order cancelled, but inventory restoration needs admin review. Contact support.' });
+            }
         }
 
         return res.json(order);
