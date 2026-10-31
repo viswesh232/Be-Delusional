@@ -483,7 +483,7 @@ exports.getOrders = async (req, res) => {
 // ── 5. GET MY ORDERS (Customer) ──────────────────────────────────────────────
 exports.getMyOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ user: req.user._id })
+        const orders = await Order.find({ user: req.user._id }).select('-razorpaySignature')
             .populate('orderItems.product', 'name image images')
             .sort({ createdAt: -1 });
         res.json(orders);
@@ -667,6 +667,7 @@ exports.recordFailedPayment = async (req, res) => {
         }
 
         const pricing = await calculateOrderPricing({ orderItems, couponCode, userId: req.user._id });
+        if (pricing.error) return res.status(400).json({ message: pricing.error });
         const items = pricing.normalizedItems || orderItems.map(i => ({
             name: i.name || 'Product',
             qty: i.qty,
