@@ -11,7 +11,9 @@ exports.getProducts = async (req, res) => {
             search, sort
         } = req.query;
 
-        let filter = all === 'true' ? {} : { isAvailable: true, isHidden: { $ne: true } };
+        // Hidden/unavailable products are exposed only through the protected admin endpoint.
+        const includeHidden = all === 'true' && req.user?.role === 'admin';
+        let filter = includeHidden ? {} : { isAvailable: true, isHidden: { $ne: true } };
 
         if (gender && gender !== 'All') {
             filter.gender = { $in: [gender, 'Unisex'] };
@@ -75,10 +77,10 @@ exports.getProductByIdOrSlug = async (req, res) => {
         const { idOrSlug } = req.params;
         let product;
         if (mongoose.Types.ObjectId.isValid(idOrSlug)) {
-            product = await Product.findById(idOrSlug);
+            product = await Product.findOne({ _id: idOrSlug, isAvailable: true, isHidden: { $ne: true } });
         }
         if (!product) {
-            product = await Product.findOne({ slug: idOrSlug });
+            product = await Product.findOne({ slug: idOrSlug, isAvailable: true, isHidden: { $ne: true } });
         }
 
         if (!product) {
@@ -138,14 +140,14 @@ exports.createProduct = async (req, res) => {
                 size: s,
                 color: parsedColors.length > 0 ? parsedColors[0].name : 'Standard',
                 colorHex: parsedColors.length > 0 ? parsedColors[0].hex : '#000000',
-                stock: 20,
+                stock: 0,
                 price: Number(price)
             }));
         }
 
         const product = new Product({
             name,
-            brand: brand || 'True Threads',
+            brand: brand || 'Echo Chasing',
             price: Number(price),
             discountPrice: discountPrice ? Number(discountPrice) : 0,
             gender: gender || 'Unisex',
@@ -249,8 +251,11 @@ exports.deleteProduct = async (req, res) => {
     try {
         const product = await Product.findById(req.params.id);
         if (!product) return res.status(404).json({ message: 'Product not found' });
-        await product.deleteOne();
-        res.json({ message: 'Product removed from store catalog' });
+        // Archive instead of hard-delete so old orders and invoices retain their product reference.
+        product.isHidden = true;
+        product.isAvailable = false;
+        await product.save();
+        res.json({ message: 'Product archived from the store catalog', product });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
