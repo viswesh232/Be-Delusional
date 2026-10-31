@@ -174,7 +174,7 @@ export default function EditMenu() {
                 color: formData.colorName,
                 colorHex: formData.colorHex,
                 stock: formData.stockPerSize[size] ?? 0,
-                price: Number(formData.price)
+                price: undefined
             }));
 
             const colors = [{ name: formData.colorName, hex: formData.colorHex }];
