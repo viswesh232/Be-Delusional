@@ -41,6 +41,9 @@ const orderSchema = new mongoose.Schema({
     razorpayPaymentId:  { type: String, default: '' },
     razorpaySignature:  { type: String, default: '', select: false },
     paidAt:             { type: Date },
+    // Atomic refund reservation in paise prevents concurrent item returns from
+    // collectively refunding more than the captured Razorpay payment.
+    refundReservedPaise: { type: Number, default: 0, min: 0 },
 
     // Shipping & Tracking
     trackingId:   { type: String, default: '' },
