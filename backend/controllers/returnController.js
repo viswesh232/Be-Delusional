@@ -101,13 +101,25 @@ exports.refundReturn = async (req, res) => {
         const keySecret = process.env.RAZORPAY_KEY_SECRET;
         if (!keyId || !keySecret) return res.status(503).json({ message: 'Payment refund is not configured' });
         const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+        const payment = await razorpay.payments.fetch(order.razorpayPaymentId);
+        if (payment.status !== 'captured' || payment.currency !== 'INR' || !Number.isSafeInteger(payment.amount)) {
+            return res.status(409).json({ message: 'Razorpay does not confirm a captured INR payment' });
+        }
+        const priorRefunds = await ReturnRequest.aggregate([
+            { $match: { order: order._id, _id: { $ne: returnReq._id }, refundStatus: { $in: ['Pending', 'Processed'] } } },
+            { $group: { _id: null, amount: { $sum: '$refundAmount' } } },
+        ]);
+        const alreadyReservedPaise = Math.round(Number(priorRefunds[0]?.amount || 0) * 100);
+        if (amountPaise + alreadyReservedPaise > payment.amount) {
+            return res.status(409).json({ message: 'Refund exceeds the remaining captured payment balance' });
+        }
 
         // Claim this refund atomically before calling Razorpay. A pending request
         // without a stored provider ID is deliberately blocked from retrying: the
         // previous process may have reached Razorpay before it stopped responding.
         let refund;
         if (returnReq.razorpayRefundId) {
-            refund = await razorpay.payments.fetchRefund(returnReq.razorpayPaymentId, returnReq.razorpayRefundId);
+            refund = await razorpay.payments.fetchRefund(order.razorpayPaymentId, returnReq.razorpayRefundId);
         } else {
             const claimed = await ReturnRequest.findOneAndUpdate(
                 {
