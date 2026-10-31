@@ -361,8 +361,19 @@ exports.createOrder = async (req, res) => {
             ) {
                 return res.status(400).json({ message: 'Payment details do not match this order.' });
             }
-            // A captured payment/order pair is single-use. Reject replay attempts,
-            // including requests from the same customer after a successful checkout.
+            // Make checkout idempotent: if the order was saved but the HTTP
+            // response was lost, return that customer's existing order on retry.
+            const existingPaidOrder = await Order.findOne({
+                user: req.user._id,
+                razorpayPaymentId,
+                razorpayOrderId,
+                paymentStatus: 'Paid',
+            }).select('-razorpaySignature');
+            if (existingPaidOrder) {
+                return res.status(200).json(existingPaidOrder);
+            }
+
+            // A captured payment/order pair is single-use across all customers.
             const paymentAlreadyUsed = await Order.exists({
                 $or: [
                     { razorpayPaymentId },
