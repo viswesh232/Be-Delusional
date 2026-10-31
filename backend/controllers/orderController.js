@@ -389,8 +389,6 @@ exports.createOrder = async (req, res) => {
             reservedStock.push({ product: item.product, size: item.size, color: item.color, qty: item.qty });
         }
 
-        const createdOrder = await order.save();
-
         const normalizedAddress = addressInfo || {
             firstName: req.user?.firstName || '',
             lastName: req.user?.lastName || '',
@@ -420,15 +418,18 @@ exports.createOrder = async (req, res) => {
             });
         }
 
+        const createdOrder = await order.save();
         res.status(201).json(createdOrder);
     } catch (error) {
         // Compensate any stock reservations if order creation/address persistence failed.
         for (const item of reservedStock.reverse()) {
-            const filter = { _id: item.product, 'variants.size': item.size };
-            if (item.color && item.color !== 'Standard') filter['variants.color'] = item.color;
-            await Product.updateOne(filter, {
-                $inc: { 'variants.$.stock': item.qty },
-            }).catch((rollbackError) => console.error('Stock rollback failed:', rollbackError));
+            const variantMatch = { size: item.size };
+            if (item.color && item.color !== 'Standard') variantMatch.color = item.color;
+            await Product.updateOne(
+                { _id: item.product, variants: { $elemMatch: variantMatch } },
+                { $inc: { 'variants.$[variant].stock': item.qty } },
+                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}) }] }
+            ).catch((rollbackError) => console.error('Stock rollback failed:', rollbackError));
         }
         console.error('Create order error:', error);
         res.status(400).json({ message: error.message || 'Unable to place order' });
