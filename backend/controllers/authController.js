@@ -14,7 +14,8 @@ exports.registerUser = async (req, res) => {
     }
 
     // 1. Check if user already exists
-    const userExists = await User.findOne({ email });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -30,7 +31,7 @@ exports.registerUser = async (req, res) => {
     const user = await User.create({
       firstName,
       lastName,
-      email: String(email).trim().toLowerCase(),
+      email: normalizedEmail,
       password: hashedPassword,
       phoneNumber,
       altPhoneNumber,
@@ -227,6 +228,7 @@ exports.resetPassword = async (req, res) => {
     // Hash the new password and save
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     // Clear the reset fields so the token can't be used again
     user.resetPasswordToken = undefined;
