@@ -824,8 +824,10 @@ exports.requestExchangeOrReturn = async (req, res) => {
             return res.status(404).json({ message: 'Product not found in this order' });
         }
 
-        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id, status: { $nin: ['Rejected', 'Cancelled'] } });
-        if (existingRequest) return res.status(409).json({ message: 'A return or exchange request already exists for this item' });
+        // The database enforces one request per order item. Include rejected requests
+        // here too so a retry returns a clear conflict instead of a duplicate-key 500.
+        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id });
+        if (existingRequest) return res.status(409).json({ message: 'A return or exchange request has already been recorded for this item. Contact support if it was rejected.' });
 
         const returnRequest = new ReturnRequest({
             order: order._id,
