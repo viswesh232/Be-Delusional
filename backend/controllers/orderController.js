@@ -234,7 +234,7 @@ exports.createRazorpayOrder = async (req, res) => {
         const options = {
             amount: Math.round(pricing.totalPrice * 100), // Razorpay in paise
             currency: 'INR',
-            receipt: `receipt_${Date.now()}`,
+            receipt: `u${String(req.user._id)}_${Date.now()}`,
         };
 
         const razorpayOrder = await razorpay.orders.create(options);
@@ -332,12 +332,18 @@ exports.createOrder = async (req, res) => {
                 key_id: process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID,
                 key_secret: razorpaySecret,
             });
-            const verifiedPayment = await razorpay.payments.fetch(razorpayPaymentId);
+            const [verifiedPayment, verifiedRazorpayOrder] = await Promise.all([
+                razorpay.payments.fetch(razorpayPaymentId),
+                razorpay.orders.fetch(razorpayOrderId),
+            ]);
             if (
                 verifiedPayment.order_id !== razorpayOrderId ||
                 verifiedPayment.currency !== 'INR' ||
                 verifiedPayment.amount !== Math.round(pricing.totalPrice * 100) ||
-                !['authorized', 'captured'].includes(verifiedPayment.status)
+                verifiedPayment.status !== 'captured' ||
+                verifiedRazorpayOrder.amount !== Math.round(pricing.totalPrice * 100) ||
+                verifiedRazorpayOrder.currency !== 'INR' ||
+                !String(verifiedRazorpayOrder.receipt || '').startsWith(`u${String(req.user._id)}_`)
             ) {
                 return res.status(400).json({ message: 'Payment details do not match this order.' });
             }
