@@ -516,11 +516,11 @@ exports.updateOrderStatus = async (req, res) => {
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
-        const allowedStatuses = ['Placed', 'Processing', 'Packed', 'Preparing', 'Shipped', 'Delivered', 'Cancelled', 'Exchange Requested', 'Exchanged', 'Return Requested', 'Returned'];
+        const allowedStatuses = ['Placed', 'Processing', 'Packed', 'Preparing', 'Shipped', 'Delivered', 'Cancelled'];
         if (!allowedStatuses.includes(req.body.status)) {
             return res.status(400).json({ message: 'Invalid order status' });
         }
-        if (['Cancelled', 'Returned', 'Exchanged'].includes(order.status)) {
+        if (['Cancelled', 'Returned', 'Exchanged', 'Return Requested', 'Exchange Requested'].includes(order.status)) {
             return res.status(409).json({ message: 'This order is in a final state and cannot be changed here' });
         }
         order.status = req.body.status;
@@ -542,8 +542,16 @@ exports.updateOrderStatus = async (req, res) => {
 exports.updateDeliveryInfo = async (req, res) => {
     try {
         const { trackingId, courierName, customNote } = req.body;
+        if (typeof trackingId !== 'string' || !trackingId.trim() || trackingId.length > 120 ||
+            (courierName !== undefined && (typeof courierName !== 'string' || courierName.length > 120)) ||
+            (customNote !== undefined && (typeof customNote !== 'string' || customNote.length > 500))) {
+            return res.status(400).json({ message: 'Valid tracking, courier and note details are required' });
+        }
         const order = await Order.findById(req.params.id).populate('user', 'firstName lastName email');
         if (!order) return res.status(404).json({ message: 'Order not found' });
+        if (['Cancelled', 'Returned', 'Exchanged', 'Return Requested', 'Exchange Requested'].includes(order.status)) {
+            return res.status(409).json({ message: 'Delivery cannot be updated for this order status' });
+        }
 
         order.trackingId  = trackingId || order.trackingId;
         order.courierName = courierName || 'Express Courier';
