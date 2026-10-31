@@ -199,7 +199,7 @@ exports.createRazorpayOrder = async (req, res) => {
     try {
         const Razorpay = require('razorpay');
         const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
-        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
+        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
         if (!razorpayKeyId || !razorpayKeySecret) {
             return res.status(500).json({ message: 'Razorpay keys are not configured' });
