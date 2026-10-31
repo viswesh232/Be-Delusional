@@ -26,10 +26,8 @@ const LiveOrders = () => {
 
     const handleStatusChange = async (id, newStatus) => {
         if (newStatus === 'Cancelled') {
-            if (!window.confirm('WARNING: Are you sure you want to CANCEL this order? This action cannot be undone.')) {
-                fetchOrders();
-                return;
-            }
+            alert('Admin cancellation is disabled here to protect payment and inventory records. Open the order details and follow the customer cancellation / refund process.');
+            return;
         }
         try {
             await API.put(`/orders/${id}/status`, { status: newStatus });
