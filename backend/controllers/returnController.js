@@ -102,17 +102,35 @@ exports.refundReturn = async (req, res) => {
         if (!keyId || !keySecret) return res.status(503).json({ message: 'Payment refund is not configured' });
         const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
 
-        // Reuse an existing refund identifier on retries; never issue a second refund.
+        // Claim this refund atomically before calling Razorpay. A pending request
+        // without a stored provider ID is deliberately blocked from retrying: the
+        // previous process may have reached Razorpay before it stopped responding.
         let refund;
         if (returnReq.razorpayRefundId) {
             refund = await razorpay.payments.fetchRefund(returnReq.razorpayPaymentId, returnReq.razorpayRefundId);
         } else {
+            const claimed = await ReturnRequest.findOneAndUpdate(
+                {
+                    _id: returnReq._id,
+                    refundStatus: { $nin: ['Pending', 'Processed'] },
+                    razorpayRefundId: { $in: ['', null] },
+                },
+                { $set: { refundStatus: 'Pending', refundInitiatedAt: new Date() } },
+                { new: true }
+            );
+            if (!claimed) {
+                return res.status(409).json({
+                    message: 'A refund is already pending or being reconciled. Do not retry until its Razorpay status is confirmed.',
+                });
+            }
+
             refund = await razorpay.payments.refund(order.razorpayPaymentId, {
                 amount: amountPaise,
                 notes: { returnRequestId: String(returnReq._id), orderId: String(order._id) },
             });
             returnReq.razorpayRefundId = refund.id;
             returnReq.refundStatus = 'Pending';
+            returnReq.refundInitiatedAt = claimed.refundInitiatedAt;
             await returnReq.save();
         }
 
