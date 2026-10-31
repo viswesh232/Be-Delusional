@@ -21,7 +21,7 @@ export const normalizeCartItem = (product) => {
     }
     if (Array.isArray(product.variants)) {
         const matchingVariant = product.variants.find(v => v.size === size && (v.color === color || color === 'Standard'));
-        if (matchingVariant && matchingVariant.price) {
+        if (matchingVariant && matchingVariant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && matchingVariant.price !== product.price) {
             price = matchingVariant.price;
         }
     }
