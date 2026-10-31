@@ -110,10 +110,12 @@ export default function ProductPage() {
     const currentVariant = Array.isArray(product.variants) 
         ? product.variants.find(v => v.size === selectedSize)
         : null;
-    const currentStock = currentVariant ? currentVariant.stock : 20;
-    const isOutOfStock = currentVariant && currentVariant.stock <= 0;
+    const currentStock = currentVariant ? Number(currentVariant.stock || 0) : Number(product.stock || 0);
+    const isOutOfStock = currentStock <= 0 || product.isAvailable === false || product.isHidden === true;
 
     const handleAddToCart = () => {
+        if (isOutOfStock) { alert('This size is currently out of stock.'); return; }
+        if (qty > currentStock) { alert(`Only ${currentStock} item(s) are available.`); return; }
         if (!selectedSize) {
             alert('Please select a size first');
             return;
