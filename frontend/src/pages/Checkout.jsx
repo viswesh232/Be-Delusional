@@ -224,14 +224,27 @@ const Checkout = () => {
                             razorpayPaymentId: response.razorpay_payment_id,
                             razorpaySignature: response.razorpay_signature,
                         });
-                        const { data: order } = await API.post('/orders', payload);
+                        let orderResponse;
+                        try {
+                            orderResponse = await API.post('/orders', payload);
+                        } catch (firstError) {
+                            // Retry the same captured payment once. The backend treats
+                            // duplicate submissions idempotently if the first save succeeded.
+                            await new Promise(resolve => setTimeout(resolve, 900));
+                            orderResponse = await API.post('/orders', payload);
+                        }
                         clearCart();
-                        navigate('/payment-success', { state: { order, clearCart: true } });
+                        navigate('/payment-success', { state: { order: orderResponse.data, clearCart: true } });
                     } catch (err) {
                         checkoutInProgress.current = false;
                         setLoading(false);
                         navigate('/payment-success', {
-                            state: { failed: true, paymentCaptured: true, paymentId: response.razorpay_payment_id, reason: `Payment succeeded but order placement needs assistance. Payment ID: ${response.razorpay_payment_id}. Please contact support; do not pay again.` },
+                            state: {
+                                failed: true,
+                                paymentCaptured: true,
+                                paymentId: response.razorpay_payment_id,
+                                reason: `Your payment was captured, but the order could not be confirmed automatically. Payment ID: ${response.razorpay_payment_id}. Do not pay again. Contact support with this ID.`,
+                            },
                         });
                     }
                 },
