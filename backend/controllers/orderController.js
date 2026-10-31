@@ -159,8 +159,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     const trimmedCouponCode = couponCode?.toUpperCase().trim();
 
     if (trimmedCouponCode) {
-        const allCoupons = [...(settings?.coupons || []), ...(settings?.hiddenCoupons || [])];
-        const coupon = allCoupons.find((entry) => entry.code === trimmedCouponCode);
+        const coupon = (settings?.coupons || []).find((entry) => entry.code === trimmedCouponCode);
 
         if (!coupon) {
             return { error: 'Invalid coupon code' };
@@ -210,6 +209,17 @@ exports.createRazorpayOrder = async (req, res) => {
             key_id: razorpayKeyId,
             key_secret: razorpayKeySecret,
         });
+
+        const storeSettings = await Settings.findById('global').select('orderingEnabled restrictedUsers');
+        if (storeSettings?.orderingEnabled === false) {
+            return res.status(403).json({ message: 'Ordering is currently disabled' });
+        }
+        const isRestricted = storeSettings?.restrictedUsers?.some(
+            (entry) => entry.userId === String(req.user._id)
+        );
+        if (isRestricted) {
+            return res.status(403).json({ message: 'Your account is restricted from placing orders' });
+        }
 
         const pricing = await calculateOrderPricing({
             orderItems: req.body.orderItems,
