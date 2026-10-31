@@ -231,10 +231,12 @@ exports.createRazorpayOrder = async (req, res) => {
             return res.status(400).json({ message: pricing.error });
         }
 
+        const receipt = `u${String(req.user._id)}_${crypto.randomUUID()}`;
         const options = {
             amount: Math.round(pricing.totalPrice * 100), // Razorpay in paise
             currency: 'INR',
-            receipt: `u${String(req.user._id)}_${Date.now()}`,
+            receipt,
+            notes: { customerId: String(req.user._id) },
         };
 
         const razorpayOrder = await razorpay.orders.create(options);
@@ -343,7 +345,7 @@ exports.createOrder = async (req, res) => {
                 verifiedPayment.status !== 'captured' ||
                 verifiedRazorpayOrder.amount !== Math.round(pricing.totalPrice * 100) ||
                 verifiedRazorpayOrder.currency !== 'INR' ||
-                !String(verifiedRazorpayOrder.receipt || '').startsWith(`u${String(req.user._id)}_`)
+                (verifiedRazorpayOrder.notes?.customerId !== String(req.user._id) || !String(verifiedRazorpayOrder.receipt || '').startsWith(`u${String(req.user._id)}_`))
             ) {
                 return res.status(400).json({ message: 'Payment details do not match this order.' });
             }
