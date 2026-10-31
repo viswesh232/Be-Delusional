@@ -40,6 +40,24 @@ export default function ReturnsAdmin() {
         }
     };
 
+    const [refundBusyId, setRefundBusyId] = useState('');
+    const [refundMessage, setRefundMessage] = useState('');
+
+    const handleRefund = async (request) => {
+        if (!window.confirm(`Check or initiate the Razorpay refund for ${request.orderId}? Only continue after the returned item has been inspected.`)) return;
+        setRefundBusyId(request._id);
+        setRefundMessage('');
+        try {
+            const { data } = await API.post(`/returns/${request._id}/refund`);
+            setRefundMessage(`Refund ${data.refundStatus || 'status checked'} — ${data.refundId || 'provider confirmation pending'}`);
+            await fetchReturns();
+        } catch (err) {
+            setRefundMessage(err.response?.data?.message || 'Refund could not be verified. Check Razorpay before retrying.');
+        } finally {
+            setRefundBusyId('');
+        }
+    };
+
     const filtered = requests.filter(r => {
         const matchesFilter = filter === 'All' || r.status === filter || (filter === 'exchange' && r.type === 'exchange') || (filter === 'return' && r.type === 'return');
         const matchesSearch = !searchTerm.trim() || 
@@ -140,6 +158,8 @@ export default function ReturnsAdmin() {
                     </div>
                 </div>
 
+                {refundMessage && <div role="status" style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', background: '#f1f5f9', color: '#334155', fontSize: '13px' }}>{refundMessage}</div>}
+
                 {/* Table */}
                 <div style={{
                     background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0',
@@ -209,9 +229,23 @@ export default function ReturnsAdmin() {
                                                 <option value="Pending">Pending</option>
                                                 <option value="Approved">Approved</option>
                                                 <option value="Pickup Scheduled">Pickup Scheduled</option>
+                                                <option value="Inspected">Inspected</option>
                                                 <option value="Completed">Completed</option>
                                                 <option value="Rejected">Rejected</option>
                                             </select>
+                                            {req.type === 'return' && ['Approved', 'Pickup Scheduled', 'Inspected'].includes(req.status) && req.refundStatus !== 'Processed' && (
+                                                <button
+                                                    type="button"
+                                                    disabled={refundBusyId === req._id}
+                                                    onClick={() => handleRefund(req)}
+                                                    style={{ display: 'block', marginTop: '8px', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: refundBusyId === req._id ? '#e2e8f0' : '#09090b', color: refundBusyId === req._id ? '#64748b' : '#fff', fontSize: '12px', fontWeight: 700, cursor: refundBusyId === req._id ? 'wait' : 'pointer' }}
+                                                >
+                                                    {refundBusyId === req._id ? 'Checking…' : req.refundStatus === 'Pending' ? 'Check refund' : 'Issue / Check refund'}
+                                                </button>
+                                            )}
+                                            {req.refundStatus && req.refundStatus !== 'Not Required' && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>Refund: {req.refundStatus}</div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))
