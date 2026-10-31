@@ -59,6 +59,14 @@ exports.getSettings = async (req, res) => {
     }
 };
 
+exports.getAdminSettings = async (req, res) => {
+    try {
+        res.json(await getOrCreate());
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 exports.updateSettings = async (req, res) => {
     try {
         const settings = await getOrCreate();
