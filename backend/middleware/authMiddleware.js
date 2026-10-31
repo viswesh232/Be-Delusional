@@ -14,7 +14,10 @@ const protect = async (req, res, next) => {
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
             // Always load the current database role; never trust a stale JWT role claim.
-            req.user = await User.findById(decoded.id).select('_id role firstName lastName email phoneNumber altPhoneNumber address isVerified');
+            req.user = await User.findById(decoded.id).select('_id role firstName lastName email phoneNumber altPhoneNumber address isVerified tokenVersion');
+            if (req.user && (decoded.tokenVersion || 0) !== (req.user.tokenVersion || 0)) {
+                return res.status(401).json({ message: 'Session expired. Please sign in again.' });
+            }
 
             if (!req.user || !req.user.isVerified) {
                 return res.status(401).json({ message: 'Not authorized, account unavailable or not verified' });
