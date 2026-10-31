@@ -497,6 +497,13 @@ exports.updateOrderStatus = async (req, res) => {
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
+        const allowedStatuses = ['Placed', 'Processing', 'Packed', 'Preparing', 'Shipped', 'Delivered', 'Cancelled', 'Exchange Requested', 'Exchanged', 'Return Requested', 'Returned'];
+        if (!allowedStatuses.includes(req.body.status)) {
+            return res.status(400).json({ message: 'Invalid order status' });
+        }
+        if (['Cancelled', 'Returned', 'Exchanged'].includes(order.status)) {
+            return res.status(409).json({ message: 'This order is in a final state and cannot be changed here' });
+        }
         order.status = req.body.status;
 
         if (req.body.status === 'Delivered') {
