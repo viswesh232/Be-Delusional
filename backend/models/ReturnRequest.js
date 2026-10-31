@@ -25,6 +25,7 @@ const returnRequestSchema = new mongoose.Schema({
     refundAmount:   { type: Number, default: 0 },
     razorpayRefundId: { type: String, default: '' },
     refundStatus:   { type: String, enum: ['Not Required', 'Pending', 'Processed', 'Failed'], default: 'Not Required' },
+    refundInitiatedAt: { type: Date },
     refundedAt:     { type: Date },
 }, { timestamps: true });
 
