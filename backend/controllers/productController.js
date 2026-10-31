@@ -187,13 +187,24 @@ exports.updateProduct = async (req, res) => {
 
         if (isJson) {
             const body = req.body;
-            Object.keys(body).forEach(key => {
+            const allowedFields = [
+                'name', 'brand', 'price', 'discountPrice', 'category', 'subCategory',
+                'gender', 'description', 'isAvailable', 'isHidden', 'isNewDrop',
+                'isBestseller', 'images', 'sizes', 'colors', 'variants', 'material',
+                'fit', 'careInstructions', 'modelStats', 'sizeGuide', 'tags',
+            ];
+            for (const key of allowedFields) {
+                if (body[key] === undefined) continue;
                 if (key === 'price' || key === 'discountPrice') {
-                    product[key] = Number(body[key]);
-                } else if (body[key] !== undefined) {
+                    const amount = Number(body[key]);
+                    if (!Number.isFinite(amount) || amount < 0) {
+                        return res.status(400).json({ message: `Invalid ${key}` });
+                    }
+                    product[key] = amount;
+                } else {
                     product[key] = body[key];
                 }
-            });
+            }
         } else {
             const {
                 name, brand, price, discountPrice, category, subCategory, gender,
