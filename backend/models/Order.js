@@ -53,12 +53,12 @@ const orderSchema = new mongoose.Schema({
     exchangeDetails: {
         requestedSize: { type: String, default: '' },
         reason:        { type: String, default: '' },
-        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Rejected', 'Completed'] },
+        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Pickup Scheduled', 'Inspected', 'Rejected', 'Completed'] },
         requestedAt:   { type: Date }
     },
     returnDetails: {
         reason:        { type: String, default: '' },
-        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Rejected', 'Refunded'] },
+        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Pickup Scheduled', 'Inspected', 'Rejected', 'Completed', 'Refunded'] },
         refundAmount:  { type: Number, default: 0 },
         requestedAt:   { type: Date }
     }
