@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
 import { ShoppingBag, Menu, X, UserRound, ArrowUpRight } from 'lucide-react';
 import CartDrawer from './CartDrawer';
+import API from '../api/axios';
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -11,11 +12,21 @@ export default function Navbar() {
   const { cartItems } = useContext(CartContext);
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  React.useEffect(() => {
+    let active = true;
+    API.get('/settings').then(({ data }) => {
+      if (!active) return;
+      const live = (data.announcements || []).find(item => item.active && item.text?.trim());
+      if (live) setAnnouncement(live.text.trim());
+    }).catch(() => {});
+    return () => { active = false; };
+  }, []);
   const count = cartItems.reduce((total, item) => total + (item.qty || 1), 0);
   const go = path => { setMenuOpen(false); navigate(path); };
 
   return <>
-    <div className="ec-announcement">PROJECT 001 IS HERE <span>·</span> FIRST DROP, LIMITED QUANTITY</div>
+    <div className="ec-announcement">{announcement || <>PROJECT 001 IS HERE <span>·</span> FIRST DROP, LIMITED QUANTITY</>}</div>
     <header className="ec-nav">
       <button className="ec-menu-toggle" onClick={() => setMenuOpen(!menuOpen)} aria-label="Toggle menu">{menuOpen ? <X /> : <Menu />}</button>
       <button className="ec-wordmark" onClick={() => go('/')}>ECHO<span>CHASING</span><small>INDEPENDENT LABEL / INDIA</small></button>
