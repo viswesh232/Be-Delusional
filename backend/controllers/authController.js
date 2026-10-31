@@ -140,10 +140,12 @@ exports.updateUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
-      user.firstName = req.body.firstName || user.firstName;
-      user.lastName = req.body.lastName || user.lastName;
-      user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
-      user.altPhoneNumber = req.body.altPhoneNumber || user.altPhoneNumber;
+      // Never allow self-service profile updates to alter role, verification,
+      // password hashes, reset tokens, or administrator flags.
+      const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'altPhoneNumber'];
+      for (const field of allowedFields) {
+        if (typeof req.body[field] === 'string') user[field] = req.body[field].trim();
+      }
 
       if (req.body.address) {
         user.address = {
