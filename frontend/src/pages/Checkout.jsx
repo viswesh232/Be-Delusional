@@ -7,14 +7,14 @@ import { MapPin, CreditCard, ArrowLeft, Shield, Tag, X, Edit3, MessageSquare, Lo
 import { getImageUrl, formatPrice } from '../utils/helpers';
 
 const colors = {
-    primary: '#472b29',
-    accent: '#218856',
-    background: '#f9fafb',
-    surface: '#ffffff',
-    ink: '#111827',
-    muted: '#6b7280',
-    border: '#e5e7eb',
-    softAccent: '#f0fdf4',
+    primary: '#171714',
+    accent: '#8C8278',
+    background: '#F4F1EB',
+    surface: '#FBFAF7',
+    ink: '#171714',
+    muted: '#77766f',
+    border: '#D8D2C8',
+    softAccent: '#EAE5DC',
 };
 
 
@@ -100,10 +100,10 @@ const Checkout = () => {
 
     const subtotal = useMemo(() => cartItems.reduce((acc, item) => acc + item.price * item.qty, 0), [cartItems]);
 
-    const rawDelivery = settings?.deliveryFee ?? 40;
-    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 499) : Infinity;
+    const rawDelivery = settings?.deliveryFee ?? 0;
+    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 999) : Infinity;
     const deliveryFee = subtotal >= freeThreshold ? 0 : rawDelivery;
-    const platformFee = settings?.platformFee ?? 5;
+    const platformFee = settings?.platformFee ?? 0;
     const gstRate = settings?.gstEnabled && settings?.gstPercent ? settings.gstPercent : 0;
     const gstAmount = Math.round((subtotal * gstRate) / 100);
 
@@ -207,7 +207,7 @@ const Checkout = () => {
 
             const options = {
                 key: rzpOrder.key_id, amount: rzpOrder.amount, currency: rzpOrder.currency,
-                name: 'True Eats', description: `${cartItems.reduce((c, i) => c + i.qty, 0)} item(s)`, order_id: rzpOrder.razorpayOrderId,
+                name: 'Echo Chasing', description: `${cartItems.reduce((c, i) => c + i.qty, 0)} item(s)`, order_id: rzpOrder.razorpayOrderId,
                 prefill: {
                     name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                     email: user.email || '', contact: user.phoneNumber || user.phone || '',
@@ -283,8 +283,8 @@ const Checkout = () => {
                 <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: colors.muted, fontWeight: 600, fontSize: '14px' }}>
                     <ArrowLeft size={16} /> Return to Store
                 </button>
-                <div style={{ fontWeight: 900, fontSize: '24px', color: colors.primary, letterSpacing: '-0.5px' }}>
-                    True<span style={{ color: colors.accent }}>Eats</span>
+                <div style={{ fontWeight: 700, fontSize: '20px', color: colors.primary, letterSpacing: '-1px' }}>
+                    ECHO<span style={{ color: colors.accent }}>CHASING</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.accent, fontWeight: 700, fontSize: '13px' }}>
                     <Lock size={14} /> Secure Checkout
