@@ -105,7 +105,10 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
         const product = productMap.get(item.productId);
         if (product && Array.isArray(product.variants) && product.variants.length > 0) {
             const variant = product.variants.find(v => v.size === item.size && (v.color === item.color || item.color === 'Standard'));
-            if (variant && variant.stock < item.qty) {
+            if (!variant) {
+                return { error: `Selected size (${item.size}) is unavailable for ${product.name}.` };
+            }
+            if (variant.stock < item.qty) {
                 return { error: `Selected size (${item.size}) for "${product.name}" has only ${variant.stock} left in stock.` };
             }
         }
