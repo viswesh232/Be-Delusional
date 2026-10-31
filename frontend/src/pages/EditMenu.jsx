@@ -214,6 +214,8 @@ export default function EditMenu() {
             fd.append('sizes', JSON.stringify(formData.selectedSizes));
             fd.append('colors', JSON.stringify(colors));
             fd.append('variants', JSON.stringify(variants));
+            // Explicitly replace the gallery on edit, including when the admin clears it.
+            fd.append('replaceImages', 'true');
 
             urlImages.filter(u => u && u.trim()).forEach(u => fd.append('urlImages', u.trim()));
             fileImages.forEach(f => fd.append('images', f));
