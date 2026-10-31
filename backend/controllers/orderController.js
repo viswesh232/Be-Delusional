@@ -443,12 +443,12 @@ exports.getOrderById = async (req, res) => {
         let order = null;
 
         if (id.startsWith('TRU-') || id.startsWith('#TRU')) {
-            order = await Order.findOne({ orderId: id })
+            order = await Order.findOne({ orderId: id }).select('-razorpaySignature')
                 .populate('user', 'firstName lastName email phoneNumber address');
         }
 
         if (!order) {
-            order = await Order.findById(id)
+            order = await Order.findById(id).select('-razorpaySignature')
                 .populate('user', 'firstName lastName email phoneNumber address');
         }
 
@@ -470,7 +470,7 @@ exports.getOrderById = async (req, res) => {
 // ── 4. GET ALL ORDERS (Admin) ────────────────────────────────────────────────
 exports.getOrders = async (req, res) => {
     try {
-        const orders = await Order.find({})
+        const orders = await Order.find({}).select('-razorpaySignature')
             .populate('user', 'firstName lastName email phoneNumber')
             .sort({ createdAt: -1 });
         res.json(orders);
@@ -559,17 +559,37 @@ exports.confirmPayment = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        order.paymentStatus = 'Paid';
-        order.paidAt = new Date();
-        if (order.status === 'Pending Payment') {
-            order.status = 'Placed';
+        if (!order.razorpayPaymentId || !order.razorpayOrderId) {
+            return res.status(400).json({ message: 'This order has no verifiable Razorpay payment' });
         }
-
+        const Razorpay = require('razorpay');
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        if (!keyId || !keySecret) return res.status(503).json({ message: 'Payment verification is not configured' });
+        const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+        const [payment, razorpayOrder] = await Promise.all([
+            razorpay.payments.fetch(order.razorpayPaymentId),
+            razorpay.orders.fetch(order.razorpayOrderId),
+        ]);
+        const expectedAmount = Math.round(Number(order.totalPrice) * 100);
+        if (
+            payment.order_id !== order.razorpayOrderId ||
+            payment.amount !== expectedAmount ||
+            payment.currency !== 'INR' ||
+            payment.status !== 'captured' ||
+            razorpayOrder.amount !== expectedAmount ||
+            razorpayOrder.currency !== 'INR'
+        ) {
+            return res.status(400).json({ message: 'Razorpay does not confirm a captured payment for this order' });
+        }
+        order.paymentStatus = 'Paid';
+        order.paidAt = payment.captured_at ? new Date(payment.captured_at * 1000) : new Date();
+        if (order.status === 'Pending Payment') order.status = 'Placed';
         await order.save();
-        res.json({ message: 'Payment confirmed', order });
+        res.json({ message: 'Payment independently verified with Razorpay', order });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Payment confirmation verification failed:', error);
+        res.status(502).json({ message: 'Unable to verify payment with Razorpay' });
     }
 };
 
