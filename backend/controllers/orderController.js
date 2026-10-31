@@ -268,6 +268,9 @@ exports.createOrder = async (req, res) => {
         if (!shippingAddress) {
             return res.status(400).json({ message: 'Shipping address is required' });
         }
+        if (!['COD', 'Online'].includes(paymentMethod)) {
+            return res.status(400).json({ message: 'Invalid payment method' });
+        }
 
         const settings = await Settings.findById('global').select('restrictedUsers orderingEnabled codEnabled');
         if (settings?.orderingEnabled === false) {
@@ -297,6 +300,10 @@ exports.createOrder = async (req, res) => {
         // Verify Razorpay signature if payment was online
         let paymentStatus = 'Pending';
         let paidAt = null;
+
+        if (paymentMethod === 'COD' && (razorpayOrderId || razorpayPaymentId || razorpaySignature)) {
+            return res.status(400).json({ message: 'COD orders cannot include online payment credentials' });
+        }
 
         if (paymentMethod !== 'COD' && (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature)) {
             return res.status(400).json({ message: 'Verified online payment is required before placing this order' });
