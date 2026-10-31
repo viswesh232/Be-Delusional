@@ -64,7 +64,7 @@ export default function Home() {
         <div className="ec-product-heading"><div><span className="ec-section-label">[ THE FIRST RELEASE ]</span><h2>PROJECT <i>001</i></h2></div><span className="ec-drop-tag">LIMITED FIRST DROP <span>↗</span></span></div>
         <div className="ec-product-grid">
           <button className="ec-product-visual" onClick={openProduct} aria-label="View Project 001">
-            {image ? <img src={getImageUrl(image)} alt="Project 001 oversized T-shirt" /> : <div className="ec-product-placeholder"><span>EC / 001</span><div className="ec-shirt-shape"><span>ECHO<br />CHASING</span></div><small>PRODUCT IMAGE WILL APPEAR HERE</small></div>}
+            {image ? <img src={getImageUrl(image)} alt="Project 001 oversized T-shirt" onError={e => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }} /> : <div className="ec-product-placeholder"><span>EC / 001</span><div className="ec-shirt-shape"><span>ECHO<br />CHASING</span></div><small>PRODUCT IMAGE WILL APPEAR HERE</small></div>}
             <span className="ec-image-stamp">DROP<br />NO. 001</span>
           </button>
           <div className="ec-product-info">
