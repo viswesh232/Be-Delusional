@@ -101,10 +101,10 @@ const Checkout = () => {
 
     const subtotal = useMemo(() => cartItems.reduce((acc, item) => acc + item.price * item.qty, 0), [cartItems]);
 
-    const rawDelivery = settings?.deliveryFee ?? 0;
-    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 999) : Infinity;
+    const rawDelivery = settings?.deliveryFee ?? 40;
+    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 499) : Infinity;
     const deliveryFee = subtotal >= freeThreshold ? 0 : rawDelivery;
-    const platformFee = settings?.platformFee ?? 0;
+    const platformFee = settings?.platformFee ?? 5;
     const gstRate = settings?.gstEnabled && settings?.gstPercent ? settings.gstPercent : 0;
     const gstAmount = Math.round((subtotal * gstRate) / 100);
 
