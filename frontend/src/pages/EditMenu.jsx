@@ -64,7 +64,7 @@ export default function EditMenu() {
     const fetchProducts = async () => {
         try {
             setLoading(true);
-            const res = await API.get('/products?all=true');
+            const res = await API.get('/products/admin/all?all=true');
             setProducts(res.data);
         } catch (err) {
             console.error('Failed to fetch products', err);
@@ -218,7 +218,7 @@ export default function EditMenu() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this product from catalog?')) return;
+        if (!window.confirm('Archive this product? It will disappear from the shop, while past orders and invoices remain intact.')) return;
         try {
             await API.delete(`/products/${id}`);
             fetchProducts();
