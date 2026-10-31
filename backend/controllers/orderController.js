@@ -91,6 +91,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     const products = await Product.find({
         _id: { $in: uniqueProductIds },
         isAvailable: true,
+        isHidden: { $ne: true },
     }).select('name price discountPrice images variants sizes colors');
 
     if (products.length !== uniqueProductIds.length) {
@@ -103,7 +104,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     for (const item of requestedItems) {
         const product = productMap.get(item.productId);
         if (product && Array.isArray(product.variants) && product.variants.length > 0) {
-            const variant = product.variants.find(v => v.size === item.size);
+            const variant = product.variants.find(v => v.size === item.size && (v.color === item.color || item.color === 'Standard'));
             if (variant && variant.stock < item.qty) {
                 return { error: `Selected size (${item.size}) for "${product.name}" has only ${variant.stock} left in stock.` };
             }
@@ -120,7 +121,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
         // If variant has specific price override
         if (Array.isArray(product.variants)) {
             const variant = product.variants.find(v => v.size === item.size);
-            if (variant && variant.price && variant.price > 0) {
+            if (variant && variant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && variant.price !== product.price) {
                 finalPrice = variant.price;
             }
         }
