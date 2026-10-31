@@ -370,7 +370,6 @@ exports.createOrder = async (req, res) => {
             paymentStatus,
             razorpayOrderId: razorpayOrderId || '',
             razorpayPaymentId: razorpayPaymentId || '',
-            razorpaySignature: razorpaySignature || '',
             paidAt,
         });
 
@@ -710,31 +709,40 @@ exports.recordFailedPayment = async (req, res) => {
 // ── 12. USER CANCEL ORDER ────────────────────────────────────────────────────
 exports.userCancelOrder = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-        if (order.user.toString() !== req.user._id.toString()) return res.status(401).json({ message: 'Not authorized' });
-
-        if (['Delivered', 'Shipped', 'Cancelled'].includes(order.status)) {
-            return res.status(400).json({ message: 'Cannot cancel an order that has already shipped or delivered' });
+        // Conditional transition makes cancellation idempotent: two requests cannot
+        // both restore the same inventory.
+        const order = await Order.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                user: req.user._id,
+                status: { $nin: ['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'] },
+            },
+            { $set: { status: 'Cancelled' } },
+            { new: true }
+        );
+        if (!order) {
+            const existing = await Order.findById(req.params.id).select('user status');
+            if (!existing) return res.status(404).json({ message: 'Order not found' });
+            if (String(existing.user) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized' });
+            return res.status(409).json({ message: 'This order can no longer be cancelled' });
         }
 
-        order.status = 'Cancelled';
-        const updated = await order.save();
-
-        // Replenish apparel variant stocks
+        // Restore the exact size + colour variant after the state transition succeeds.
         for (const item of order.orderItems) {
-            if (item.size && item.size !== 'Standard') {
-                await Product.updateOne(
-                    { _id: item.product, 'variants.size': item.size },
-                    { $inc: { 'variants.$.stock': item.qty } }
-                );
-            }
+            if (!item.size || item.size === 'Standard') continue;
+            const variantMatch = { size: item.size };
+            if (item.color && item.color !== 'Standard') variantMatch.color = item.color;
+            await Product.updateOne(
+                { _id: item.product, variants: { $elemMatch: variantMatch } },
+                { $inc: { 'variants.$[variant].stock': item.qty } },
+                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}) }] }
+            );
         }
 
-        res.json(updated);
+        return res.json(order);
     } catch (error) {
         console.error('Cancel order error:', error);
-        res.status(500).json({ message: error.message });
+        return res.status(500).json({ message: 'Unable to cancel order safely' });
     }
 };
 
