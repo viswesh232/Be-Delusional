@@ -32,6 +32,8 @@ export default function Home() {
   }, []);
 
   const image = product.images?.[0] || product.image;
+  const availableSizes = Array.isArray(product.sizes) ? product.sizes : fallbackProduct.sizes;
+  const salePrice = product.discountPrice > 0 && product.discountPrice < product.price ? product.discountPrice : product.price;
   const openProduct = () => {
     if (product._id) navigate(`/product/${product.slug || product._id}`);
     else document.getElementById('project-001')?.scrollIntoView({ behavior: 'smooth' });
@@ -69,13 +71,13 @@ export default function Home() {
             <div className="ec-product-meta"><span>ECH — 001</span><span>01 / 01</span></div>
             <p className="ec-kicker">THE ONE THAT STARTED IT</p>
             <h3>{product.name}</h3>
-            <p className="ec-price">₹{Number((product.discountPrice > 0 && product.discountPrice < product.price) ? product.discountPrice : (product.price || 1499)).toLocaleString('en-IN')} {product.discountPrice > 0 && product.discountPrice < product.price ? <del>₹{Number(product.price).toLocaleString('en-IN')}</del> : null} <small>INCLUSIVE OF TAXES</small></p>
-            <p className="ec-product-desc">An everyday essential with an oversized silhouette. Built around comfort, simplicity and a little bit of defiance.</p>
-            <div className="ec-spec-row"><span>FABRIC</span><strong>{product.fabric || 'Cotton'}</strong></div>
-            <div className="ec-spec-row"><span>FIT</span><strong>OVERSIZED / UNISEX</strong></div>
-            <div className="ec-size-block"><span>AVAILABLE SIZES</span><div>{['S','M','L','XL','XXL'].map(size => <span key={size}>{size}</span>)}</div></div>
+            <p className="ec-price">₹{Number(salePrice || 1499).toLocaleString('en-IN')} {product.discountPrice > 0 && product.discountPrice < product.price ? <del>₹{Number(product.price).toLocaleString('en-IN')}</del> : null} <small>INCLUSIVE OF TAXES</small></p>
+            <p className="ec-product-desc">{product.description || 'An everyday essential with an oversized silhouette. Built around comfort, simplicity and a little bit of defiance.'}</p>
+            <div className="ec-spec-row"><span>FABRIC</span><strong>{product.material || product.fabric || 'Cotton'}</strong></div>
+            <div className="ec-spec-row"><span>FIT</span><strong>{product.fit || 'OVERSIZED / UNISEX'}</strong></div>
+            <div className="ec-size-block"><span>AVAILABLE SIZES</span><div>{availableSizes.map(size => <span key={size}>{size}</span>)}</div></div>
             <button className="ec-add-button" onClick={openProduct}>{productLoaded ? 'VIEW PRODUCT' : 'DISCOVER PROJECT 001'} <ArrowUpRight size={18} /></button>
-            <p className="ec-stock-note"><span className="ec-live-dot" /> LIMITED QUANTITY · FIRST DROP</p>
+            <p className="ec-stock-note"><span className="ec-live-dot" /> {product.isAvailable === false ? 'CURRENTLY UNAVAILABLE' : 'LIMITED QUANTITY · FIRST DROP'}</p>
           </div>
         </div>
       </section>
