@@ -25,4 +25,7 @@ const returnRequestSchema = new mongoose.Schema({
     refundAmount:   { type: Number, default: 0 },
 }, { timestamps: true });
 
+// One request per purchased product in an order. Prevents concurrent duplicate submissions.
+returnRequestSchema.index({ order: 1, product: 1 }, { unique: true });
+
 module.exports = mongoose.model('ReturnRequest', returnRequestSchema);
