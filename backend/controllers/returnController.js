@@ -40,14 +40,30 @@ exports.updateReturnStatus = async (req, res) => {
 
         const returnReq = await ReturnRequest.findById(req.params.id);
         if (!returnReq) return res.status(404).json({ message: 'Return request not found' });
-        if (['Completed', 'Rejected'].includes(returnReq.status) && returnReq.status !== status) {
-            return res.status(409).json({ message: 'This request is already closed' });
+        const transitions = {
+            Pending: ['Approved', 'Rejected'],
+            Approved: ['Pickup Scheduled', 'Rejected'],
+            'Pickup Scheduled': ['Inspected', 'Rejected'],
+            Inspected: ['Completed', 'Rejected'],
+            Completed: [],
+            Rejected: [],
+        };
+        if (returnReq.status !== status && !transitions[returnReq.status]?.includes(status)) {
+            return res.status(409).json({ message: `Cannot move a request from ${returnReq.status} to ${status}` });
         }
 
         const order = await Order.findById(returnReq.order);
         if (!order) return res.status(404).json({ message: 'Associated order not found' });
+        if (status === 'Completed' && returnReq.type === 'exchange') {
+            return res.status(409).json({
+                message: 'Exchange completion is disabled until replacement stock is reserved and a replacement shipment is recorded.',
+            });
+        }
         if (status === 'Completed' && returnReq.type === 'return' && order.paymentMethod === 'Online' && returnReq.refundStatus !== 'Processed') {
             return res.status(409).json({ message: 'Complete the verified refund before closing this return' });
+        }
+        if (status === 'Completed' && returnReq.type === 'return' && returnReq.status !== 'Inspected') {
+            return res.status(409).json({ message: 'The returned item must be inspected before completion' });
         }
 
         returnReq.status = status;
@@ -82,8 +98,8 @@ exports.refundReturn = async (req, res) => {
         const returnReq = await ReturnRequest.findById(req.params.id);
         if (!returnReq) return res.status(404).json({ message: 'Return request not found' });
         if (returnReq.type !== 'return') return res.status(400).json({ message: 'Only return requests can be refunded' });
-        if (!['Approved', 'Pickup Scheduled', 'Inspected'].includes(returnReq.status)) {
-            return res.status(409).json({ message: 'The return must be approved and inspected before refund' });
+        if (returnReq.status !== 'Inspected') {
+            return res.status(409).json({ message: 'The returned item must be physically received and marked Inspected before refund' });
         }
         if (returnReq.refundStatus === 'Processed') {
             return res.status(409).json({ message: 'This return has already been refunded' });
