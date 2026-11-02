@@ -11,6 +11,7 @@ const returnRequestSchema = new mongoose.Schema({
     productImage:   { type: String, default: '' },
     originalSize:   { type: String, default: '' },
     originalColor:  { type: String, default: '' },
+    qty:            { type: Number, default: 1, min: 1 },
 
     type:           { type: String, enum: ['exchange', 'return'], required: true },
     requestedSize:  { type: String, default: '' }, // For exchanges
