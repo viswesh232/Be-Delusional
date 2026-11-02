@@ -841,7 +841,7 @@ exports.userCancelOrder = async (req, res) => {
 // ── 13. REQUEST SIZE EXCHANGE OR RETURN ──────────────────────────────────────
 exports.requestExchangeOrReturn = async (req, res) => {
     try {
-        const { orderId, productId, type, requestedSize, reason, images } = req.body;
+        const { orderId, productId, size, color, type, requestedSize, reason, images } = req.body;
         if (!orderId || !productId || !['return', 'exchange'].includes(type) || typeof reason !== 'string' || !reason.trim() || reason.length > 1000) {
             return res.status(400).json({ message: 'Valid order, product, request type and reason are required' });
         }
@@ -858,14 +858,18 @@ exports.requestExchangeOrReturn = async (req, res) => {
             return res.status(400).json({ message: 'Exchanges or returns can only be requested after delivery' });
         }
 
-        const orderItem = order.orderItems.find(i => i.product.toString() === productId.toString());
+        const orderItem = order.orderItems.find(i =>
+            i.product.toString() === productId.toString() &&
+            (size === undefined || String(i.size || 'Standard') === String(size)) &&
+            (color === undefined || String(i.color || 'Standard') === String(color))
+        );
         if (!orderItem) {
             return res.status(404).json({ message: 'Product not found in this order' });
         }
 
         // The database enforces one request per order item. Include rejected requests
         // here too so a retry returns a clear conflict instead of a duplicate-key 500.
-        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id });
+        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id, originalSize: orderItem.size || 'Standard', originalColor: orderItem.color || 'Standard' });
         if (existingRequest) return res.status(409).json({ message: 'A return or exchange request has already been recorded for this item. Contact support if it was rejected.' });
 
         const returnRequest = new ReturnRequest({
@@ -879,6 +883,7 @@ exports.requestExchangeOrReturn = async (req, res) => {
             productImage: orderItem.image,
             originalSize: orderItem.size,
             originalColor: orderItem.color,
+            qty: orderItem.qty,
             type: type === 'exchange' ? 'exchange' : 'return',
             requestedSize: requestedSize || '',
             reason,
