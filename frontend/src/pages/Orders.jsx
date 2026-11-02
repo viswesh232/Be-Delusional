@@ -84,6 +84,8 @@ export default function Orders() {
             await API.post('/orders/request-return', {
                 orderId: targetOrder._id,
                 productId: targetProduct.product?._id || targetProduct.product,
+                size: targetProduct.size || 'Standard',
+                color: targetProduct.color || 'Standard',
                 type: requestType,
                 requestedSize: requestType === 'exchange' ? requestedSize : '',
                 reason: returnReason,
