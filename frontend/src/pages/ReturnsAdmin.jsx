@@ -220,20 +220,21 @@ export default function ReturnsAdmin() {
                                         <td style={{ padding: '14px 18px' }}>
                                             <select
                                                 value={req.status}
+                                                disabled={['Completed', 'Rejected'].includes(req.status)}
                                                 onChange={e => handleUpdateStatus(req._id, e.target.value)}
                                                 style={{
                                                     padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1',
                                                     fontSize: '13px', background: '#ffffff', cursor: 'pointer'
                                                 }}
                                             >
-                                                <option value="Pending">Pending</option>
-                                                <option value="Approved">Approved</option>
-                                                <option value="Pickup Scheduled">Pickup Scheduled</option>
-                                                <option value="Inspected">Inspected</option>
-                                                <option value="Completed">Completed</option>
-                                                <option value="Rejected">Rejected</option>
+                                                <option value={req.status}>{req.status}</option>
+                                                {(req.status === 'Pending' ? ['Approved', 'Rejected']
+                                                    : req.status === 'Approved' ? ['Pickup Scheduled', 'Rejected']
+                                                    : req.status === 'Pickup Scheduled' ? ['Inspected', 'Rejected']
+                                                    : req.status === 'Inspected' ? (req.type === 'return' ? ['Completed', 'Rejected'] : ['Rejected'])
+                                                    : []).map(next => <option key={next} value={next}>{next}</option>)}
                                             </select>
-                                            {req.type === 'return' && ['Approved', 'Pickup Scheduled', 'Inspected'].includes(req.status) && req.refundStatus !== 'Processed' && (
+                                            {req.type === 'return' && req.status === 'Inspected' && req.refundStatus !== 'Processed' && (
                                                 <button
                                                     type="button"
                                                     disabled={refundBusyId === req._id}
