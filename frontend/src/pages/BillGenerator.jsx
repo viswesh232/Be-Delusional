@@ -111,7 +111,7 @@ const triggerBulkPrint = (bills) => {
 const BillPreview = ({ bill, onPrint }) => (
     <div style={{ backgroundColor: colors.white, borderRadius: '24px', padding: '30px', boxShadow: '0 15px 40px rgba(0,0,0,0.06)', border: `1px solid ${colors.peach}` }}>
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #ddd', paddingBottom: '16px', marginBottom: '16px' }}>
-            <h2 style={{ margin: 0, letterSpacing: '3px', color: colors.forest }}>TRUE EATS</h2>
+            <h2 style={{ margin: 0, letterSpacing: '3px', color: colors.forest }}>ECHO CHASING</h2>
             <p style={{ margin: '4px 0', fontSize: '12px', color: colors.slate }}>The way food was meant to be</p>
         </div>
 
@@ -648,7 +648,7 @@ const BulkPrintMode = () => {
                     {filteredList.length === 0 && <p style={{ fontSize: '13px', color: colors.slate, textAlign: 'center', padding: '20px 0' }}>No orders found</p>}
                     {filteredList.map(o => {
                         const isSelected = !!selected.find(x => x._id === o._id);
-                        const isDisabled = !isSelected && selected.length >= 8;
+                        const isDisabled = !isSelected && selected.length >= 4;
                         return (
                             <div key={o._id} onClick={() => !isDisabled && toggle(o)} style={{
                                 padding: '10px 12px', borderRadius: '12px', cursor: isDisabled ? 'not-allowed' : 'pointer',
@@ -684,8 +684,8 @@ const BulkPrintMode = () => {
                 {selected.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.slate, backgroundColor: colors.white, borderRadius: '20px' }}>
                         <Printer size={50} style={{ opacity: 0.15, display: 'block', margin: '0 auto 16px' }} />
-                        <p style={{ fontSize: '14px' }}>Select 1–6 orders from the list to bulk print</p>
-                        <p style={{ fontSize: '12px', opacity: 0.6 }}>All 6 bills will fit on one A4 page, 2 per row</p>
+                        <p style={{ fontSize: '14px' }}>Select 1–4 orders from the list to bulk print</p>
+                        <p style={{ fontSize: '12px', opacity: 0.6 }}>Up to 4 bills fit on one A4 page, 2 per row</p>
                     </div>
                 ) : (
                     <>
