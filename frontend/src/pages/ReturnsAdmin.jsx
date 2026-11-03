@@ -42,6 +42,8 @@ export default function ReturnsAdmin() {
 
     const [refundBusyId, setRefundBusyId] = useState('');
     const [refundMessage, setRefundMessage] = useState('');
+    const [exchangeCourier, setExchangeCourier] = useState('');
+    const [exchangeTracking, setExchangeTracking] = useState('');
 
     const handleRefund = async (request) => {
         if (!window.confirm(`Check or initiate the Razorpay refund for ${request.orderId}? Only continue after the returned item has been inspected.`)) return;
@@ -53,6 +55,30 @@ export default function ReturnsAdmin() {
             await fetchReturns();
         } catch (err) {
             setRefundMessage(err.response?.data?.message || 'Refund could not be verified. Check Razorpay before retrying.');
+        } finally {
+            setRefundBusyId('');
+        }
+    };
+
+    const handleExchangeFulfillment = async (request) => {
+        if (!exchangeCourier.trim() || !/^[A-Za-z0-9-]{4,50}$/.test(exchangeTracking.trim())) {
+            setRefundMessage('Enter a courier name and a tracking ID (4–50 letters, numbers or hyphens).');
+            return;
+        }
+        if (!window.confirm('Reserve the requested replacement size from stock and record this shipment?')) return;
+        setRefundBusyId(request._id);
+        setRefundMessage('');
+        try {
+            const { data } = await API.post(`/returns/${request._id}/exchange-fulfillment`, {
+                courierName: exchangeCourier.trim(),
+                trackingId: exchangeTracking.trim(),
+            });
+            setRefundMessage(data.message);
+            setExchangeCourier('');
+            setExchangeTracking('');
+            await fetchReturns();
+        } catch (err) {
+            setRefundMessage(err.response?.data?.message || 'Exchange fulfilment failed. Check inventory and try again.');
         } finally {
             setRefundBusyId('');
         }
@@ -234,6 +260,16 @@ export default function ReturnsAdmin() {
                                                     : req.status === 'Inspected' ? (req.type === 'return' ? ['Completed', 'Rejected'] : ['Rejected'])
                                                     : []).map(next => <option key={next} value={next}>{next}</option>)}
                                             </select>
+                                            {req.type === 'exchange' && req.status === 'Inspected' && !req.replacementStockReservedAt && (
+                                                <div style={{ display: 'grid', gap: '6px', marginTop: '8px', minWidth: '180px' }}>
+                                                    <input aria-label="Replacement courier" placeholder="Courier name" value={exchangeCourier} onChange={e => setExchangeCourier(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} />
+                                                    <input aria-label="Replacement tracking ID" placeholder="Tracking ID" value={exchangeTracking} onChange={e => setExchangeTracking(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} />
+                                                    <button type="button" disabled={refundBusyId === req._id} onClick={() => handleExchangeFulfillment(req)} style={{ padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#09090b', color: '#fff', fontSize: '12px', fontWeight: 700 }}>
+                                                        {refundBusyId === req._id ? 'Processing…' : 'Reserve & Dispatch'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {req.replacementTrackingId && <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>Replacement: {req.replacementCourier} · {req.replacementTrackingId}</div>}
                                             {req.type === 'return' && req.status === 'Inspected' && req.refundStatus !== 'Processed' && (
                                                 <button
                                                     type="button"
