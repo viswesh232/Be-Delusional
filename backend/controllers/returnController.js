@@ -1,6 +1,8 @@
 const ReturnRequest = require('../models/ReturnRequest');
 const Order = require('../models/Order');
 const Razorpay = require('razorpay');
+const mongoose = require('mongoose');
+const Product = require('../models/Product');
 
 // @desc  Get all returns & exchanges (Admin)
 // @route GET /api/returns
@@ -54,10 +56,8 @@ exports.updateReturnStatus = async (req, res) => {
 
         const order = await Order.findById(returnReq.order);
         if (!order) return res.status(404).json({ message: 'Associated order not found' });
-        if (status === 'Completed' && returnReq.type === 'exchange') {
-            return res.status(409).json({
-                message: 'Exchange completion is disabled until replacement stock is reserved and a replacement shipment is recorded.',
-            });
+        if (status === 'Completed' && returnReq.type === 'exchange' && (!returnReq.replacementStockReservedAt || !returnReq.replacementShippedAt || !returnReq.replacementTrackingId || !returnReq.replacementCourier)) {
+            return res.status(409).json({ message: 'Reserve replacement stock and record its courier and tracking ID before completing this exchange.' });
         }
         if (status === 'Completed' && returnReq.type === 'return' && order.paymentMethod === 'Online' && returnReq.refundStatus !== 'Processed') {
             return res.status(409).json({ message: 'Complete the verified refund before closing this return' });
