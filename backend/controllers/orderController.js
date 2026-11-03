@@ -858,10 +858,15 @@ exports.requestExchangeOrReturn = async (req, res) => {
             return res.status(400).json({ message: 'Exchanges or returns can only be requested after delivery' });
         }
 
-        const orderItem = order.orderItems.find(i =>
-            i.product.toString() === productId.toString() &&
-            (size === undefined || String(i.size || 'Standard') === String(size)) &&
-            (color === undefined || String(i.color || 'Standard') === String(color))
+        const matchingItems = order.orderItems.filter(i => i.product.toString() === productId.toString());
+        if ((size === undefined || color === undefined) && matchingItems.length > 1) {
+            return res.status(400).json({ message: 'Select the exact purchased size and colour before submitting this request' });
+        }
+        const requestedOriginalSize = String(size || 'Standard');
+        const requestedOriginalColor = String(color || 'Standard');
+        const orderItem = matchingItems.find(i =>
+            String(i.size || 'Standard') === requestedOriginalSize &&
+            String(i.color || 'Standard') === requestedOriginalColor
         );
         if (!orderItem) {
             return res.status(404).json({ message: 'Product not found in this order' });
