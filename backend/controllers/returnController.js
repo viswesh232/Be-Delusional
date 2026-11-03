@@ -3,6 +3,7 @@ const Order = require('../models/Order');
 const Razorpay = require('razorpay');
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
+const { canTransitionReturnStatus } = require('../utils/returnWorkflow');
 
 // @desc  Get all returns & exchanges (Admin)
 // @route GET /api/returns
@@ -42,15 +43,7 @@ exports.updateReturnStatus = async (req, res) => {
 
         const returnReq = await ReturnRequest.findById(req.params.id);
         if (!returnReq) return res.status(404).json({ message: 'Return request not found' });
-        const transitions = {
-            Pending: ['Approved', 'Rejected'],
-            Approved: ['Pickup Scheduled', 'Rejected'],
-            'Pickup Scheduled': ['Inspected', 'Rejected'],
-            Inspected: ['Completed', 'Rejected'],
-            Completed: [],
-            Rejected: [],
-        };
-        if (returnReq.status !== status && !transitions[returnReq.status]?.includes(status)) {
+        if (!canTransitionReturnStatus(returnReq.status, status)) {
             return res.status(409).json({ message: `Cannot move a request from ${returnReq.status} to ${status}` });
         }
 
