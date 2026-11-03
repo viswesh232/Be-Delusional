@@ -30,7 +30,8 @@ const returnRequestSchema = new mongoose.Schema({
     refundedAt:     { type: Date },
 }, { timestamps: true });
 
-// One request per purchased product in an order. Prevents concurrent duplicate submissions.
-returnRequestSchema.index({ order: 1, product: 1 }, { unique: true });
+// One request per purchased product variant in an order. A product can appear
+// more than once when the customer bought different sizes or colours.
+returnRequestSchema.index({ order: 1, product: 1, originalSize: 1, originalColor: 1 }, { unique: true });
 
 module.exports = mongoose.model('ReturnRequest', returnRequestSchema);
