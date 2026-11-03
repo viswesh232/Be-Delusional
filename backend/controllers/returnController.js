@@ -194,3 +194,60 @@ exports.refundReturn = async (req, res) => {
         return res.status(502).json({ message: 'Unable to process or verify refund with Razorpay' });
     }
 };
+
+
+// @desc Reserve replacement stock and record replacement shipment (Admin)
+// @route POST /api/returns/:id/exchange-fulfillment
+exports.fulfillExchange = async (req, res) => {
+    const { courierName, trackingId } = req.body;
+    if (typeof courierName !== 'string' || !courierName.trim() || courierName.trim().length > 100 ||
+        typeof trackingId !== 'string' || !/^[A-Za-z0-9-]{4,50}$/.test(trackingId.trim())) {
+        return res.status(400).json({ message: 'A valid courier name and tracking ID are required' });
+    }
+
+    const session = await mongoose.startSession();
+    try {
+        let updatedRequest;
+        await session.withTransaction(async () => {
+            const request = await ReturnRequest.findOne({
+                _id: req.params.id,
+                type: 'exchange',
+                status: 'Inspected',
+                replacementStockReservedAt: { $exists: false },
+            }).session(session);
+            if (!request) {
+                const existing = await ReturnRequest.findById(req.params.id).session(session);
+                if (!existing) throw Object.assign(new Error('Exchange request not found'), { statusCode: 404 });
+                throw Object.assign(new Error('Exchange must be Inspected and not already fulfilled'), { statusCode: 409 });
+            }
+
+            const stockResult = await Product.updateOne(
+                { _id: request.product, variants: { $elemMatch: { size: request.requestedSize, color: request.originalColor, stock: { $gte: request.qty } } } },
+                { $inc: { 'variants.$[variant].stock': -request.qty } },
+                { arrayFilters: [{ 'variant.size': request.requestedSize, 'variant.color': request.originalColor, 'variant.stock': { $gte: request.qty } }], session }
+            );
+            if (stockResult.modifiedCount !== 1) {
+                throw Object.assign(new Error('Replacement size is unavailable in the required colour or does not have enough stock'), { statusCode: 409 });
+            }
+
+            request.replacementStockReservedAt = new Date();
+            request.replacementShippedAt = new Date();
+            request.replacementCourier = courierName.trim();
+            request.replacementTrackingId = trackingId.trim();
+            await request.save({ session });
+
+            const order = await Order.findById(request.order).session(session);
+            if (!order) throw Object.assign(new Error('Associated order not found'), { statusCode: 404 });
+            order.trackingId = trackingId.trim();
+            order.courierName = courierName.trim();
+            order.shippedAt = new Date();
+            await order.save({ session });
+            updatedRequest = request;
+        });
+        return res.json({ message: 'Replacement stock reserved and shipment recorded', returnRequest: updatedRequest });
+    } catch (error) {
+        return res.status(error.statusCode || 500).json({ message: error.statusCode ? error.message : 'Unable to fulfil exchange safely. No changes were committed.' });
+    } finally {
+        await session.endSession();
+    }
+};
