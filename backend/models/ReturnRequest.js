@@ -15,6 +15,10 @@ const returnRequestSchema = new mongoose.Schema({
 
     type:           { type: String, enum: ['exchange', 'return'], required: true },
     requestedSize:  { type: String, default: '' }, // For exchanges
+    replacementCourier: { type: String, default: '' },
+    replacementTrackingId: { type: String, default: '' },
+    replacementShippedAt: { type: Date },
+    replacementStockReservedAt: { type: Date },
     reason:         { type: String, required: true },
     images:         { type: [String], default: [] }, // Customer uploaded proof / tags
     status: {
