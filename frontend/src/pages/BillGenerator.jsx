@@ -699,7 +699,7 @@ const BulkPrintMode = () => {
                                         width: '22px', height: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px'
                                     }}>✕</button>
                                     <div style={{ textAlign: 'center', borderBottom: '1px dashed #ddd', paddingBottom: '8px', marginBottom: '8px' }}>
-                                        <div style={{ fontWeight: '900', letterSpacing: '2px', color: colors.forest, fontSize: '13px' }}>TRUE EATS</div>
+                                        <div style={{ fontWeight: '900', letterSpacing: '2px', color: colors.forest, fontSize: '13px' }}>ECHO CHASING</div>
                                     </div>
                                     <div style={{ color: colors.slate, lineHeight: '1.7' }}>
                                         <div><b>#{o.orderId}</b></div>
