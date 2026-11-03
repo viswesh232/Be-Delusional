@@ -257,7 +257,7 @@ export default function ReturnsAdmin() {
                                                 {(req.status === 'Pending' ? ['Approved', 'Rejected']
                                                     : req.status === 'Approved' ? ['Pickup Scheduled', 'Rejected']
                                                     : req.status === 'Pickup Scheduled' ? ['Inspected', 'Rejected']
-                                                    : req.status === 'Inspected' ? (req.type === 'return' ? ['Completed', 'Rejected'] : ['Rejected'])
+                                                    : req.status === 'Inspected' ? (req.type === 'return' || req.replacementShippedAt ? ['Completed', 'Rejected'] : ['Rejected'])
                                                     : []).map(next => <option key={next} value={next}>{next}</option>)}
                                             </select>
                                             {req.type === 'exchange' && req.status === 'Inspected' && !req.replacementStockReservedAt && (
