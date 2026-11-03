@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const ReturnRequest = require('../models/ReturnRequest');
@@ -788,53 +789,44 @@ exports.recordFailedPayment = async (req, res) => {
 
 // ── 12. USER CANCEL ORDER ────────────────────────────────────────────────────
 exports.userCancelOrder = async (req, res) => {
+    const session = await mongoose.startSession();
     try {
-        // Read and authorize before changing state. Captured online payments must
-        // go through a verified refund process; this endpoint does not refund.
-        const existing = await Order.findById(req.params.id).select('user status paymentMethod paymentStatus orderItems');
-        if (!existing) return res.status(404).json({ message: 'Order not found' });
-        if (String(existing.user) !== String(req.user._id)) return res.status(403).json({ message: 'Not authorized' });
-        if (['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'].includes(existing.status)) {
-            return res.status(409).json({ message: 'This order can no longer be cancelled' });
-        }
-        if (existing.paymentMethod === 'Online' && existing.paymentStatus === 'Paid') {
-            return res.status(409).json({
-                message: 'This online payment has already been captured. Contact support to arrange cancellation and a verified refund.',
-            });
-        }
-
-        // Compare-and-set makes cancellation idempotent under concurrent requests.
-        const order = await Order.findOneAndUpdate(
-            {
-                _id: req.params.id,
-                user: req.user._id,
-                status: existing.status,
-                paymentStatus: existing.paymentStatus,
-            },
-            { $set: { status: 'Cancelled' } },
-            { new: true }
-        );
-        if (!order) return res.status(409).json({ message: 'Order changed while cancellation was being processed. Refresh and try again.' });
-
-        // Restore the exact size + colour variant only after the state transition wins.
-        for (const item of order.orderItems) {
-            if (!item.size || item.size === 'Standard') continue;
-            const variantMatch = { size: item.size, color: item.color || 'Standard' };
-            const restored = await Product.updateOne(
-                { _id: item.product, variants: { $elemMatch: variantMatch } },
-                { $inc: { 'variants.$[variant].stock': item.qty } },
-                { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard' }] }
-            );
-            if (restored.modifiedCount !== 1) {
-                console.error('Inventory restoration needs reconciliation for cancelled order:', order._id, item.product, item.size, item.color);
-                return res.status(500).json({ message: 'Order cancelled, but inventory restoration needs admin review. Contact support.' });
+        let cancelledOrder;
+        await session.withTransaction(async () => {
+            const order = await Order.findById(req.params.id).session(session);
+            if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+            if (String(order.user) !== String(req.user._id)) throw Object.assign(new Error('Not authorized'), { statusCode: 403 });
+            if (['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'].includes(order.status)) {
+                throw Object.assign(new Error('This order can no longer be cancelled'), { statusCode: 409 });
             }
-        }
+            if (order.paymentMethod === 'Online' && order.paymentStatus === 'Paid') {
+                throw Object.assign(new Error('This online payment has already been captured. Contact support to arrange cancellation and a verified refund.'), { statusCode: 409 });
+            }
 
-        return res.json(order);
+            for (const item of order.orderItems) {
+                if (!item.size || item.size === 'Standard') continue;
+                const restored = await Product.updateOne(
+                    { _id: item.product, variants: { $elemMatch: { size: item.size, color: item.color || 'Standard' } } },
+                    { $inc: { 'variants.$[variant].stock': item.qty } },
+                    { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard' }], session }
+                );
+                if (restored.modifiedCount !== 1) {
+                    throw Object.assign(new Error(`Inventory variant missing for ${item.name} (${item.size}, ${item.color || 'Standard'}). Cancellation was not committed; admin review is required.`), { statusCode: 409 });
+                }
+            }
+
+            order.status = 'Cancelled';
+            await order.save({ session });
+            cancelledOrder = order;
+        });
+        return res.json(cancelledOrder);
     } catch (error) {
-        console.error('Cancel order error:', error);
-        return res.status(500).json({ message: 'Unable to cancel order safely' });
+        console.error('Cancel order transaction failed:', error);
+        return res.status(error.statusCode || 500).json({
+            message: error.statusCode ? error.message : 'Unable to cancel order safely. No inventory or order changes were committed.',
+        });
+    } finally {
+        await session.endSession();
     }
 };
 
