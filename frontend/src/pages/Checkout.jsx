@@ -264,7 +264,18 @@ const Checkout = () => {
             });
             rzp.open();
         } catch (err) {
-            alert(`Could not start payment: ${err.response?.data?.message || err.message}`);
+            const serverMessage = err.response?.data?.message;
+            const gatewayDetail = err.response?.data?.error;
+            const diagnostic = gatewayDetail
+                ? `${serverMessage || 'Payment initiation failed'} — ${gatewayDetail}`
+                : serverMessage || err.message || 'Unknown payment error';
+            console.error('Payment initiation failed:', {
+                status: err.response?.status,
+                message: serverMessage,
+                gatewayDetail,
+                code: err.response?.data?.code,
+            });
+            alert(`Could not start payment: ${diagnostic}`);
             checkoutInProgress.current = false;
             setLoading(false);
         }
