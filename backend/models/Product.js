@@ -20,7 +20,7 @@ const sizeGuideSchema = new mongoose.Schema({
 const productSchema = new mongoose.Schema({
     name:            { type: String, required: true, trim: true },
     slug:            { type: String, unique: true },
-    brand:           { type: String, default: 'True Threads', trim: true },
+    brand:           { type: String, default: 'Echo Chasing', trim: true },
     description:     { type: String, required: true },
     price:           { type: Number, required: true }, // base regular price
     discountPrice:   { type: Number, default: 0 },    // sale price (if any)

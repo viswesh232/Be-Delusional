@@ -16,6 +16,8 @@ const DeliveryInfo = () => {
         return params.get('search') || '';
     });
     const [loading, setLoading] = useState(false);
+    const [courierName, setCourierName] = useState('');
+    const [errorMessage, setErrorMessage] = useState('');
     const navigate = useNavigate();
     
 
@@ -24,11 +26,12 @@ const DeliveryInfo = () => {
     const fetchAllOrders = async () => {
         try {
             const { data } = await API.get('/orders');
-            setOrders(data);
-            
-            // Auto-select first pending order if nothing is selected
-            const pending = data.filter(o => o.status === 'Preparing');
-            if (pending.length > 0 && !selectedOrder) setSelectedOrder(pending[0]);
+            setOrders(Array.isArray(data) ? data : []);
+            if (selectedOrder) {
+                const refreshed = data.find(o => o._id === selectedOrder._id);
+                if (refreshed) setSelectedOrder(refreshed);
+                else setSelectedOrder(null);
+            }
         } catch (err) { console.error(err); }
     };
 
@@ -36,7 +39,7 @@ const DeliveryInfo = () => {
         const loadOrders = async () => {
             try {
                 const { data } = await API.get('/orders');
-                setOrders(data);
+                setOrders(Array.isArray(data) ? data : []);
 
                 const pending = data.filter(o => o.status === 'Preparing');
                 if (pending.length > 0) {
@@ -51,28 +54,29 @@ const DeliveryInfo = () => {
     }, []);
 
     const handleDispatch = async () => {
-        if (!trackingId) return alert("Please enter the Tracking ID first!");
+        if (!trackingId.trim()) return setErrorMessage('Enter the courier tracking ID before dispatch.');
         if (!selectedOrder) return;
+        if (!['Preparing', 'Shipped'].includes(selectedOrder.status)) {
+            return setErrorMessage('Only quality-checked or already shipped orders can be dispatched or updated.');
+        }
 
         setLoading(true);
+        setErrorMessage('');
         try {
-            // Logic: This hits the /:id/delivery route in your backend
-            await API.put(`/orders/${selectedOrder._id}/delivery`, { 
-                trackingId: trackingId,
-                courierName: "Private Courier", // Default name
-                customNote: customMessage,
-                orderId: selectedOrder.orderId // Fallback ID
+            await API.put(`/orders/${selectedOrder._id}/delivery`, {
+                trackingId: trackingId.trim(),
+                courierName: courierName.trim() || 'Private Courier',
+                customNote: customMessage.trim(),
             });
-            
-            alert(`Success! Dispatch details updated for ${selectedOrder.orderId}`);
-            
+            await fetchAllOrders();
             setTrackingId('');
             setCustomMessage('');
-            fetchAllOrders(); // Refresh lists
-        } catch {
-            alert("Failed to update shipping info. Check if 'Shipped' is in your Backend Model enum.");
+            alert(`Dispatch details saved for ${selectedOrder.orderId}`);
+        } catch (err) {
+            setErrorMessage(err.response?.data?.message || 'Could not update dispatch details. Refresh the order and try again.');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // --- SAFER FILTER LOGIC (Prevents .toLowerCase() crash) ---
@@ -94,7 +98,7 @@ const DeliveryInfo = () => {
                 <h1 style={{ margin: 0, color: colors.forest, fontWeight: 900 }}>Dispatch Station 📦</h1>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 2fr', gap: '30px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 2fr)', gap: '30px' }}>
                 
                 {/* 1. LEFT SIDE: SEARCH & LISTS */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -171,6 +175,10 @@ const DeliveryInfo = () => {
                         </div>
 
                         <div style={{ borderTop: '2px dashed #eee', paddingTop: '30px' }}>
+                            {errorMessage && <div role="alert" style={{ padding: '12px', marginBottom: '16px', borderRadius: '8px', background: '#fef2f2', color: '#991b1b', fontSize: '13px' }}>{errorMessage}</div>}
+                            <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>Courier name</label>
+                            <input style={inputStyle} placeholder="Courier / delivery partner" value={courierName} onChange={e => setCourierName(e.target.value)} />
+
                             <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>Tracking ID</label>
                             <input 
                                 style={inputStyle}
@@ -189,10 +197,10 @@ const DeliveryInfo = () => {
 
                             <button 
                                 onClick={handleDispatch}
-                                disabled={loading || selectedOrder.status === 'Delivered'}
+                                disabled={loading || selectedOrder.status === 'Delivered' || !['Preparing', 'Shipped'].includes(selectedOrder.status)}
                                 style={{ 
                                     width: '100%', backgroundColor: selectedOrder.status === 'Delivered' ? '#94a3b8' : colors.forest, color: '#fff', border: 'none', 
-                                    padding: '18px', borderRadius: '12px', fontWeight: 'bold', cursor: selectedOrder.status === 'Delivered' ? 'not-allowed' : 'pointer',
+                                    padding: '18px', borderRadius: '12px', fontWeight: 'bold', cursor: selectedOrder.status === 'Delivered' || !['Preparing', 'Shipped'].includes(selectedOrder.status) ? 'not-allowed' : 'pointer',
                                     display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center'
                                 }}
                             >

@@ -39,8 +39,11 @@ const orderSchema = new mongoose.Schema({
     paymentStatus:      { type: String, default: 'Pending', enum: ['Pending', 'Paid', 'Failed', 'Refunded'] },
     razorpayOrderId:    { type: String, default: '' },
     razorpayPaymentId:  { type: String, default: '' },
-    razorpaySignature:  { type: String, default: '' },
+    razorpaySignature:  { type: String, default: '', select: false },
     paidAt:             { type: Date },
+    // Atomic refund reservation in paise prevents concurrent item returns from
+    // collectively refunding more than the captured Razorpay payment.
+    refundReservedPaise: { type: Number, default: 0, min: 0 },
 
     // Shipping & Tracking
     trackingId:   { type: String, default: '' },
@@ -53,12 +56,12 @@ const orderSchema = new mongoose.Schema({
     exchangeDetails: {
         requestedSize: { type: String, default: '' },
         reason:        { type: String, default: '' },
-        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Rejected', 'Completed'] },
+        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Pickup Scheduled', 'Inspected', 'Rejected', 'Completed'] },
         requestedAt:   { type: Date }
     },
     returnDetails: {
         reason:        { type: String, default: '' },
-        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Rejected', 'Refunded'] },
+        status:        { type: String, default: 'None', enum: ['None', 'Pending', 'Approved', 'Pickup Scheduled', 'Inspected', 'Rejected', 'Completed', 'Refunded'] },
         refundAmount:  { type: Number, default: 0 },
         requestedAt:   { type: Date }
     }

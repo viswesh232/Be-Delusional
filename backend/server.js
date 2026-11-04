@@ -15,17 +15,49 @@ const contactRoutes = require('./routes/contactRoutes');
 const wishlistRoutes = require('./routes/wishlistRoutes');
 const returnRoutes = require('./routes/returnRoutes');
 
-// 2. Connect to Database
-connectDB();
+// Connect to persistent storage before accepting requests.
 
 const app = express();
 const path = require('path');
 
 // 3. MIDDLEWARE (The Filters - Must come FIRST)
-app.use(cors()); // Allow cross-origin requests
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.json()); // Essential: Translates JSON bodies
-app.use(express.urlencoded({ extended: false })); // Translates URL-encoded bodies
+// Allow only configured storefront origins. Keep CORS_ORIGINS as a comma-separated
+// allowlist in production (for example, the deployed storefront URL).
+const allowedOrigins = new Set([
+    // Current Render storefront origin. Keep this explicit so a missing Render
+    // environment variable cannot silently break the deployed customer app.
+    'https://be-delusional-test1.onrender.com',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+].map((value) => (value || '').trim().replace(/\/$/, '')).filter(Boolean));
+
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    next();
+});
+app.use(cors({
+    origin(origin, callback) {
+        if (!origin || allowedOrigins.has(origin.replace(/\/$/, ''))) return callback(null, true);
+        return callback(new Error('Origin not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 600,
+}));
+const uploadDirectory = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadDirectory, {
+    dotfiles: 'deny',
+    index: false,
+    maxAge: '1d',
+}));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
 // 4. ROUTES (The Doors)
 app.use('/api/auth', authRoutes);
@@ -50,13 +82,25 @@ app.use((req, res) => {
 
 // 7. GLOBAL ERROR HANDLER
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({ success: false, message: err.message || 'Server Error' });
+  console.error(err);
+  const statusCode = err.statusCode || (err.message === 'Origin not allowed by CORS' ? 403 : 500);
+  res.status(statusCode).json({
+    success: false,
+    message: statusCode >= 500 ? 'An unexpected server error occurred' : err.message,
+  });
 });
 
 // 6. START SERVER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+const startServer = async () => {
+    try {
+        await connectDB();
+        app.listen(PORT, () => {
+            console.log(`Server running on port ${PORT}`);
+        });
+    } catch (error) {
+        console.error('Server startup aborted:', error.message);
+        process.exit(1);
+    }
+};
+startServer();

@@ -19,7 +19,8 @@ exports.getProductReviews = async (req, res) => {
 exports.addReview = async (req, res) => {
     try {
         const { rating, title, body, fitFeedback, sizePurchased, customerHeight } = req.body;
-        if (!rating || !body) {
+        const numericRating = Number(rating);
+        if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5 || typeof body !== 'string' || !body.trim() || body.length > 3000) {
             return res.status(400).json({ message: 'Rating and review text are required' });
         }
 
@@ -38,14 +39,23 @@ exports.addReview = async (req, res) => {
             return res.status(400).json({ message: 'You have already reviewed this product' });
         }
 
-        // Check product exists
-        const product = await Product.findById(req.params.productId);
+        // Only verified purchasers may review a product they have received.
+        const purchasedOrder = await Order.findOne({
+            user: req.user._id,
+            status: 'Delivered',
+            'orderItems.product': req.params.productId,
+        }).select('_id');
+        if (!purchasedOrder) {
+            return res.status(403).json({ message: 'A delivered purchase is required before reviewing this product' });
+        }
+
+        const product = await Product.findById(req.params.productId).select('_id');
         if (!product) return res.status(404).json({ message: 'Product not found' });
 
         const review = await Review.create({
             product:        req.params.productId,
             user:           req.user._id,
-            rating:         Number(rating),
+            rating:         numericRating,
             title:          title || '',
             body,
             images,

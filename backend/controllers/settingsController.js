@@ -36,6 +36,30 @@ const getEligibleUserDiscount = async (userId) => {
 
 exports.getSettings = async (req, res) => {
     try {
+        const settings = await getOrCreate();
+        // Public endpoint always returns a strict storefront allowlist, even for an admin token.
+        return res.json({
+            deliveryFee: settings.deliveryFee,
+            minOrderValue: settings.minOrderValue,
+            platformFee: settings.platformFee,
+            gstPercent: settings.gstPercent,
+            gstEnabled: settings.gstEnabled,
+            freeDeliveryAbove: settings.freeDeliveryAbove,
+            freeDeliveryEnabled: settings.freeDeliveryEnabled,
+            orderingEnabled: settings.orderingEnabled,
+            codEnabled: settings.codEnabled,
+            newUserDiscountEnabled: settings.newUserDiscountEnabled,
+            newUserDiscount: settings.newUserDiscount,
+            coupons: settings.coupons,
+            announcements: settings.announcements,
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+exports.getAdminSettings = async (req, res) => {
+    try {
         res.json(await getOrCreate());
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -63,25 +87,25 @@ exports.updateSettings = async (req, res) => {
 exports.validateCoupon = async (req, res) => {
     try {
         const { code, subtotal } = req.body;
-        if (!code) return res.status(400).json({ message: 'No code provided' });
+        if (typeof code !== 'string' || !code.trim() || !Number.isFinite(Number(subtotal)) || Number(subtotal) < 0) return res.status(400).json({ message: 'Valid coupon code and subtotal are required' });
 
         const settings = await getOrCreate();
-        const allCoupons = [...(settings.coupons || []), ...(settings.hiddenCoupons || [])];
-        const coupon = allCoupons.find((entry) => entry.code === code.toUpperCase().trim());
+        const coupon = (settings.coupons || []).find((entry) => entry.code === code.toUpperCase().trim());
 
         if (!coupon) return res.status(404).json({ message: 'Invalid coupon code' });
 
-        if (coupon.minOrder > 0 && subtotal < coupon.minOrder) {
+        if (coupon.minOrder > 0 && Number(subtotal) < coupon.minOrder) {
             return res.status(400).json({
                 message: `This coupon requires a minimum order of Rs. ${coupon.minOrder}`,
                 minOrder: coupon.minOrder,
             });
         }
 
+        const safeSubtotal = Number(subtotal);
         let discount = coupon.type === 'percent'
-            ? Math.round((subtotal * coupon.value) / 100)
+            ? Math.round((safeSubtotal * coupon.value) / 100)
             : coupon.value;
-        discount = Math.min(discount, subtotal);
+        discount = Math.min(discount, safeSubtotal);
 
         res.json({ valid: true, coupon, discount });
     } catch (error) {

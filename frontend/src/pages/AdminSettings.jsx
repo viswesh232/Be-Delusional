@@ -113,7 +113,7 @@ const SystemSettings = () => {
     // ── Load settings from DB on mount ──
     useEffect(() => {
         Promise.all([
-            API.get('/settings'),
+            API.get('/settings/admin'),
             API.get('/admin/users'),
         ]).then(([settingsRes, usersRes]) => {
             const data = { ...DEFAULT, ...settingsRes.data };
@@ -473,7 +473,7 @@ const MenuAvailabilitySection = () => {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        API.get('/products?all=true').then(({ data }) => setProducts(data)).catch(() => {});
+        API.get('/products/admin/all?all=true').then(({ data }) => setProducts(data)).catch(() => {});
     }, []);
 
     const toggle = (id, current) => {

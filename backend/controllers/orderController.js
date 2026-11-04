@@ -1,5 +1,6 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const mongoose = require('mongoose');
 const Counter = require('../models/Counter');
 const User = require('../models/User');
 const ReturnRequest = require('../models/ReturnRequest');
@@ -91,6 +92,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     const products = await Product.find({
         _id: { $in: uniqueProductIds },
         isAvailable: true,
+        isHidden: { $ne: true },
     }).select('name price discountPrice images variants sizes colors');
 
     if (products.length !== uniqueProductIds.length) {
@@ -103,8 +105,11 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     for (const item of requestedItems) {
         const product = productMap.get(item.productId);
         if (product && Array.isArray(product.variants) && product.variants.length > 0) {
-            const variant = product.variants.find(v => v.size === item.size);
-            if (variant && variant.stock < item.qty) {
+            const variant = product.variants.find(v => v.size === item.size && (v.color || 'Standard') === item.color);
+            if (!variant) {
+                return { error: `Selected size (${item.size}) is unavailable for ${product.name}.` };
+            }
+            if (variant.stock < item.qty) {
                 return { error: `Selected size (${item.size}) for "${product.name}" has only ${variant.stock} left in stock.` };
             }
         }
@@ -119,8 +124,8 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
 
         // If variant has specific price override
         if (Array.isArray(product.variants)) {
-            const variant = product.variants.find(v => v.size === item.size);
-            if (variant && variant.price && variant.price > 0) {
+            const variant = product.variants.find(v => v.size === item.size && (v.color || 'Standard') === item.color);
+            if (variant && variant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && variant.price !== product.price) {
                 finalPrice = variant.price;
             }
         }
@@ -143,10 +148,10 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
         return { error: `Minimum order value is Rs. ${minOrderValue}` };
     }
 
-    const rawDelivery = settings?.deliveryFee ?? 0;
-    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 999) : Infinity;
+    const rawDelivery = settings?.deliveryFee ?? 40;
+    const freeThreshold = settings?.freeDeliveryEnabled ? (settings?.freeDeliveryAbove ?? 499) : Infinity;
     const deliveryFee = subtotal >= freeThreshold ? 0 : rawDelivery;
-    const platformFee = settings?.platformFee ?? 0;
+    const platformFee = settings?.platformFee ?? 5;
     const gstRate = settings?.gstEnabled && settings?.gstPercent ? settings.gstPercent : 0;
     const gstAmount = Math.round((subtotal * gstRate) / 100);
 
@@ -155,8 +160,7 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
     const trimmedCouponCode = couponCode?.toUpperCase().trim();
 
     if (trimmedCouponCode) {
-        const allCoupons = [...(settings?.coupons || []), ...(settings?.hiddenCoupons || [])];
-        const coupon = allCoupons.find((entry) => entry.code === trimmedCouponCode);
+        const coupon = (settings?.coupons || []).find((entry) => entry.code === trimmedCouponCode);
 
         if (!coupon) {
             return { error: 'Invalid coupon code' };
@@ -195,8 +199,8 @@ const calculateOrderPricing = async ({ orderItems, couponCode, userId }) => {
 exports.createRazorpayOrder = async (req, res) => {
     try {
         const Razorpay = require('razorpay');
-        const razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID;
-        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
+        const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+        const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
 
         if (!razorpayKeyId || !razorpayKeySecret) {
             return res.status(500).json({ message: 'Razorpay keys are not configured' });
@@ -207,6 +211,20 @@ exports.createRazorpayOrder = async (req, res) => {
             key_secret: razorpayKeySecret,
         });
 
+        const storeSettings = await Settings.findById('global').select('orderingEnabled restrictedUsers');
+        if (storeSettings?.orderingEnabled === false) {
+            return res.status(403).json({ message: 'Ordering is currently disabled' });
+        }
+        const isRestricted = storeSettings?.restrictedUsers?.some(
+            (entry) => entry.userId === String(req.user._id)
+        );
+        if (isRestricted) {
+            return res.status(403).json({ message: 'Your account is restricted from placing orders' });
+        }
+
+        if (!Array.isArray(req.body.orderItems) || req.body.orderItems.length === 0 || req.body.orderItems.length > 50) {
+            return res.status(400).json({ message: 'Cart is empty or contains too many line items' });
+        }
         const pricing = await calculateOrderPricing({
             orderItems: req.body.orderItems,
             couponCode: req.body.couponCode,
@@ -217,10 +235,13 @@ exports.createRazorpayOrder = async (req, res) => {
             return res.status(400).json({ message: pricing.error });
         }
 
+        if (pricing.totalPrice <= 0) return res.status(400).json({ message: 'Payment amount must be greater than zero' });
+        const receipt = `u${String(req.user._id)}_${crypto.randomUUID()}`;
         const options = {
             amount: Math.round(pricing.totalPrice * 100), // Razorpay in paise
             currency: 'INR',
-            receipt: `receipt_${Date.now()}`,
+            receipt,
+            notes: { customerId: String(req.user._id) },
         };
 
         const razorpayOrder = await razorpay.orders.create(options);
@@ -232,13 +253,36 @@ exports.createRazorpayOrder = async (req, res) => {
             totalPrice: pricing.totalPrice,
         });
     } catch (error) {
-        console.error('Razorpay order creation error:', error);
-        res.status(500).json({ message: 'Payment initiation failed', error: error.message });
+        const providerStatus = Number(error.statusCode || error.status || 0);
+        const providerCode = String(error.error?.code || error.code || '');
+        const providerDescription = String(error.error?.description || error.description || error.message || '');
+        console.error('Razorpay order creation error:', {
+            status: providerStatus || undefined,
+            code: providerCode || undefined,
+            description: providerDescription.slice(0, 500),
+        });
+
+        // Return a useful, sanitized message without exposing credentials or request headers.
+        let message = 'Payment initiation failed. Please try again later.';
+        if (/authentication|unauthorized|invalid key|bad request/i.test(providerDescription) || providerCode === 'BAD_REQUEST_ERROR') {
+            message = 'Razorpay rejected the payment request. Check the Razorpay key pair, account activation and payment configuration in the backend environment.';
+        } else if (/network|timeout|ECONN|ENOTFOUND/i.test(providerDescription)) {
+            message = 'Unable to reach Razorpay. Check backend network connectivity and try again.';
+        } else if (providerStatus === 400) {
+            message = 'Razorpay rejected the order details. Check the order amount and currency.';
+        } else if (providerStatus === 401 || providerStatus === 403) {
+            message = 'Razorpay authentication failed. Verify the live/test key pair configured on the backend.';
+        }
+        res.status(providerStatus >= 400 && providerStatus < 500 ? 502 : 503).json({
+            message,
+            code: providerCode || undefined,
+        });
     }
 };
 
 // ── 2. PLACE ORDER ───────────────────────────────────────────────────────────
 exports.createOrder = async (req, res) => {
+    const reservedStock = [];
     try {
         const {
             orderItems, shippingAddress,
@@ -250,8 +294,14 @@ exports.createOrder = async (req, res) => {
         if (!orderItems || orderItems.length === 0) {
             return res.status(400).json({ message: 'No order items' });
         }
-        if (!shippingAddress) {
-            return res.status(400).json({ message: 'Shipping address is required' });
+        if (typeof shippingAddress !== 'string' || !shippingAddress.trim() || shippingAddress.length > 2000) {
+            return res.status(400).json({ message: 'A valid shipping address is required' });
+        }
+        if (typeof customNote === 'string' && customNote.length > 500) {
+            return res.status(400).json({ message: 'Order note is too long' });
+        }
+        if (!['COD', 'Online'].includes(paymentMethod)) {
+            return res.status(400).json({ message: 'Invalid payment method' });
         }
 
         const settings = await Settings.findById('global').select('restrictedUsers orderingEnabled codEnabled');
@@ -270,6 +320,9 @@ exports.createOrder = async (req, res) => {
             return res.status(403).json({ message: 'Your account is restricted from placing orders' });
         }
 
+        if (!Array.isArray(orderItems) || orderItems.length === 0 || orderItems.length > 50) {
+            return res.status(400).json({ message: 'Cart is empty or contains too many line items' });
+        }
         const pricing = await calculateOrderPricing({
             orderItems,
             couponCode,
@@ -283,12 +336,16 @@ exports.createOrder = async (req, res) => {
         let paymentStatus = 'Pending';
         let paidAt = null;
 
+        if (paymentMethod === 'COD' && (razorpayOrderId || razorpayPaymentId || razorpaySignature)) {
+            return res.status(400).json({ message: 'COD orders cannot include online payment credentials' });
+        }
+
         if (paymentMethod !== 'COD' && (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature)) {
             return res.status(400).json({ message: 'Verified online payment is required before placing this order' });
         }
 
         if (paymentMethod !== 'COD' && razorpayPaymentId && razorpaySignature) {
-            const razorpaySecret = process.env.RAZORPAY_KEY_SECRET || process.env.VITE_RAZORPAY_KEY_SECRET;
+            const razorpaySecret = process.env.RAZORPAY_KEY_SECRET;
             if (!razorpaySecret) {
                 return res.status(500).json({ message: 'Razorpay verification secret is not configured' });
             }
@@ -299,12 +356,62 @@ exports.createOrder = async (req, res) => {
                 .update(body)
                 .digest('hex');
 
-            if (expectedSignature === razorpaySignature) {
-                paymentStatus = 'Paid';
-                paidAt = new Date();
-            } else {
+            const signatureBuffer = Buffer.from(expectedSignature);
+            const suppliedBuffer = Buffer.from(String(razorpaySignature));
+            if (signatureBuffer.length !== suppliedBuffer.length || !crypto.timingSafeEqual(signatureBuffer, suppliedBuffer)) {
                 return res.status(400).json({ message: 'Payment verification failed. Order not placed.' });
             }
+
+            const Razorpay = require('razorpay');
+            const razorpay = new Razorpay({
+                key_id: process.env.RAZORPAY_KEY_ID,
+                key_secret: razorpaySecret,
+            });
+            const [verifiedPayment, verifiedRazorpayOrder] = await Promise.all([
+                razorpay.payments.fetch(razorpayPaymentId),
+                razorpay.orders.fetch(razorpayOrderId),
+            ]);
+            const expectedAmount = Math.round(pricing.totalPrice * 100);
+            if (
+                verifiedPayment.order_id !== razorpayOrderId ||
+                verifiedPayment.currency !== 'INR' ||
+                verifiedPayment.amount !== expectedAmount ||
+                verifiedPayment.status !== 'captured' ||
+                verifiedRazorpayOrder.amount !== expectedAmount ||
+                verifiedRazorpayOrder.currency !== 'INR' ||
+                verifiedRazorpayOrder.notes?.customerId !== String(req.user._id) ||
+                !String(verifiedRazorpayOrder.receipt || '').startsWith(`u${String(req.user._id)}_`)
+            ) {
+                return res.status(400).json({ message: 'Payment details do not match this order.' });
+            }
+            // Make checkout idempotent: if the order was saved but the HTTP
+            // response was lost, return that customer's existing order on retry.
+            const existingPaidOrder = await Order.findOne({
+                user: req.user._id,
+                razorpayPaymentId,
+                razorpayOrderId,
+                paymentStatus: 'Paid',
+            }).select('-razorpaySignature');
+            if (existingPaidOrder) {
+                return res.status(200).json(existingPaidOrder);
+            }
+
+            // A captured payment/order pair is single-use across all customers.
+            const paymentAlreadyUsed = await Order.exists({
+                $or: [
+                    { razorpayPaymentId },
+                    { razorpayOrderId },
+                ],
+            });
+            if (paymentAlreadyUsed) {
+                return res.status(409).json({ message: 'This payment has already been used for an order' });
+            }
+            paymentStatus = 'Paid';
+            paidAt = new Date();
+        }
+
+        if (paymentMethod === 'Online' && paymentStatus !== 'Paid') {
+            return res.status(400).json({ message: 'Online payment has not been captured' });
         }
 
         const orderId = await generateOrderId();
@@ -324,20 +431,23 @@ exports.createOrder = async (req, res) => {
             paymentStatus,
             razorpayOrderId: razorpayOrderId || '',
             razorpayPaymentId: razorpayPaymentId || '',
-            razorpaySignature: razorpaySignature || '',
             paidAt,
         });
 
-        const createdOrder = await order.save();
-
-        // Atomically decrement stock for apparel variants
+        // Reserve each selected variant atomically before creating the order.
+        // The stock predicate prevents overselling when two customers check out together.
         for (const item of pricing.normalizedItems) {
-            if (item.size && item.size !== 'Standard') {
-                await Product.updateOne(
-                    { _id: item.product, 'variants.size': item.size },
-                    { $inc: { 'variants.$.stock': -item.qty } }
-                );
+            if (!item.size || item.size === 'Standard') continue;
+            const variantFilter = { size: item.size, color: item.color || 'Standard', stock: { $gte: item.qty } };
+            const reservation = await Product.updateOne(
+                { _id: item.product, variants: { $elemMatch: variantFilter } },
+                { $inc: { 'variants.$[variant].stock': -item.qty } },
+                { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard', 'variant.stock': { $gte: item.qty } }] }
+            );
+            if (reservation.modifiedCount !== 1) {
+                throw new Error(`Insufficient stock for ${item.name} (${item.size}${item.color !== 'Standard' ? ` / ${item.color}` : ''}). Please refresh your cart.`);
             }
+            reservedStock.push({ product: item.product, size: item.size, color: item.color, qty: item.qty });
         }
 
         const normalizedAddress = addressInfo || {
@@ -369,10 +479,21 @@ exports.createOrder = async (req, res) => {
             });
         }
 
+        const createdOrder = await order.save();
         res.status(201).json(createdOrder);
     } catch (error) {
+        // Compensate any stock reservations if order creation/address persistence failed.
+        for (const item of reservedStock.reverse()) {
+            const variantMatch = { size: item.size };
+            if (item.color && item.color !== 'Standard') variantMatch.color = item.color;
+            await Product.updateOne(
+                { _id: item.product, variants: { $elemMatch: variantMatch } },
+                { $inc: { 'variants.$[variant].stock': item.qty } },
+                { arrayFilters: [{ 'variant.size': item.size, ...(item.color && item.color !== 'Standard' ? { 'variant.color': item.color } : {}) }] }
+            ).catch((rollbackError) => console.error('Stock rollback failed:', rollbackError));
+        }
         console.error('Create order error:', error);
-        res.status(500).json({ message: error.message });
+        res.status(400).json({ message: error.message || 'Unable to place order' });
     }
 };
 
@@ -383,12 +504,12 @@ exports.getOrderById = async (req, res) => {
         let order = null;
 
         if (id.startsWith('TRU-') || id.startsWith('#TRU')) {
-            order = await Order.findOne({ orderId: id })
+            order = await Order.findOne({ orderId: id }).select('-razorpaySignature')
                 .populate('user', 'firstName lastName email phoneNumber address');
         }
 
         if (!order) {
-            order = await Order.findById(id)
+            order = await Order.findById(id).select('-razorpaySignature')
                 .populate('user', 'firstName lastName email phoneNumber address');
         }
 
@@ -410,7 +531,7 @@ exports.getOrderById = async (req, res) => {
 // ── 4. GET ALL ORDERS (Admin) ────────────────────────────────────────────────
 exports.getOrders = async (req, res) => {
     try {
-        const orders = await Order.find({})
+        const orders = await Order.find({}).select('-razorpaySignature')
             .populate('user', 'firstName lastName email phoneNumber')
             .sort({ createdAt: -1 });
         res.json(orders);
@@ -422,7 +543,7 @@ exports.getOrders = async (req, res) => {
 // ── 5. GET MY ORDERS (Customer) ──────────────────────────────────────────────
 exports.getMyOrders = async (req, res) => {
     try {
-        const orders = await Order.find({ user: req.user._id })
+        const orders = await Order.find({ user: req.user._id }).select('-razorpaySignature')
             .populate('orderItems.product', 'name image images')
             .sort({ createdAt: -1 });
         res.json(orders);
@@ -434,19 +555,46 @@ exports.getMyOrders = async (req, res) => {
 // ── 6. UPDATE ORDER STATUS (Admin) ──────────────────────────────────────────
 exports.updateOrderStatus = async (req, res) => {
     try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        order.status = req.body.status;
-
-        if (req.body.status === 'Delivered') {
-            order.completedAt = new Date();
-        } else {
-            order.completedAt = null;
+        const allowedTransitions = {
+            Placed: ['Processing'],
+            Processing: ['Packed', 'Preparing'],
+            Packed: ['Preparing'],
+            Preparing: ['Shipped'],
+            Shipped: ['Delivered'],
+        };
+        const requestedStatus = req.body.status;
+        if (requestedStatus === 'Cancelled') {
+            return res.status(409).json({
+                message: 'Use the dedicated cancellation and refund workflow. Direct status cancellation is disabled to protect inventory and payments.',
+            });
+        }
+        if (!Object.values(allowedTransitions).flat().includes(requestedStatus)) {
+            return res.status(400).json({ message: 'Invalid order status' });
         }
 
-        await order.save();
-        res.json(order);
+        const order = await Order.findById(req.params.id);
+        if (!order) return res.status(404).json({ message: 'Order not found' });
+        if (order.paymentStatus !== 'Paid' && order.paymentMethod !== 'COD') {
+            return res.status(409).json({ message: 'Payment must be verified before fulfilment can begin' });
+        }
+        const nextStatuses = allowedTransitions[order.status] || [];
+        if (!nextStatuses.includes(requestedStatus)) {
+            return res.status(409).json({ message: `Cannot move an order from ${order.status} to ${requestedStatus}` });
+        }
+
+        const updated = await Order.findOneAndUpdate(
+            { _id: order._id, status: order.status },
+            {
+                $set: {
+                    status: requestedStatus,
+                    completedAt: requestedStatus === 'Delivered' ? new Date() : null,
+                    shippedAt: requestedStatus === 'Shipped' ? new Date() : order.shippedAt,
+                },
+            },
+            { new: true }
+        );
+        if (!updated) return res.status(409).json({ message: 'Order changed while this update was being saved. Refresh and try again.' });
+        res.json(updated);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -456,8 +604,22 @@ exports.updateOrderStatus = async (req, res) => {
 exports.updateDeliveryInfo = async (req, res) => {
     try {
         const { trackingId, courierName, customNote } = req.body;
+        if (typeof trackingId !== 'string' || !trackingId.trim() || trackingId.length > 120 ||
+            (courierName !== undefined && (typeof courierName !== 'string' || courierName.length > 120)) ||
+            (customNote !== undefined && (typeof customNote !== 'string' || customNote.length > 500))) {
+            return res.status(400).json({ message: 'Valid tracking, courier and note details are required' });
+        }
         const order = await Order.findById(req.params.id).populate('user', 'firstName lastName email');
         if (!order) return res.status(404).json({ message: 'Order not found' });
+        if (['Cancelled', 'Returned', 'Exchanged', 'Return Requested', 'Exchange Requested'].includes(order.status)) {
+            return res.status(409).json({ message: 'Delivery cannot be updated for this order status' });
+        }
+        if (order.paymentMethod !== 'COD' && order.paymentStatus !== 'Paid') {
+            return res.status(409).json({ message: 'Payment must be verified before dispatch' });
+        }
+        if (!['Preparing', 'Shipped'].includes(order.status)) {
+            return res.status(409).json({ message: 'Order must pass packing and quality checks before dispatch' });
+        }
 
         order.trackingId  = trackingId || order.trackingId;
         order.courierName = courierName || 'Express Courier';
@@ -492,17 +654,37 @@ exports.confirmPayment = async (req, res) => {
     try {
         const order = await Order.findById(req.params.id);
         if (!order) return res.status(404).json({ message: 'Order not found' });
-
-        order.paymentStatus = 'Paid';
-        order.paidAt = new Date();
-        if (order.status === 'Pending Payment') {
-            order.status = 'Placed';
+        if (!order.razorpayPaymentId || !order.razorpayOrderId) {
+            return res.status(400).json({ message: 'This order has no verifiable Razorpay payment' });
         }
-
+        const Razorpay = require('razorpay');
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        if (!keyId || !keySecret) return res.status(503).json({ message: 'Payment verification is not configured' });
+        const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+        const [payment, razorpayOrder] = await Promise.all([
+            razorpay.payments.fetch(order.razorpayPaymentId),
+            razorpay.orders.fetch(order.razorpayOrderId),
+        ]);
+        const expectedAmount = Math.round(Number(order.totalPrice) * 100);
+        if (
+            payment.order_id !== order.razorpayOrderId ||
+            payment.amount !== expectedAmount ||
+            payment.currency !== 'INR' ||
+            payment.status !== 'captured' ||
+            razorpayOrder.amount !== expectedAmount ||
+            razorpayOrder.currency !== 'INR'
+        ) {
+            return res.status(400).json({ message: 'Razorpay does not confirm a captured payment for this order' });
+        }
+        order.paymentStatus = 'Paid';
+        order.paidAt = payment.captured_at ? new Date(payment.captured_at * 1000) : new Date();
+        if (order.status === 'Pending Payment') order.status = 'Placed';
         await order.save();
-        res.json({ message: 'Payment confirmed', order });
+        res.json({ message: 'Payment independently verified with Razorpay', order });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Payment confirmation verification failed:', error);
+        res.status(502).json({ message: 'Unable to verify payment with Razorpay' });
     }
 };
 
@@ -574,11 +756,20 @@ exports.getRevenueStats = async (req, res) => {
 exports.recordFailedPayment = async (req, res) => {
     try {
         const { orderItems, shippingAddress, couponCode, customNote, razorpayOrderId, paymentMethod } = req.body;
-        if (!orderItems || orderItems.length === 0) {
+        if (!Array.isArray(orderItems) || orderItems.length === 0) {
             return res.status(400).json({ message: 'No order items' });
+        }
+        if (typeof shippingAddress !== 'string' || !shippingAddress.trim() || shippingAddress.length > 2000) {
+            return res.status(400).json({ message: 'A valid shipping address is required' });
+        }
+        const storeSettings = await Settings.findById('global').select('orderingEnabled restrictedUsers');
+        if (storeSettings?.orderingEnabled === false) return res.status(403).json({ message: 'Ordering is currently disabled' });
+        if (storeSettings?.restrictedUsers?.some((entry) => entry.userId === String(req.user._id))) {
+            return res.status(403).json({ message: 'Your account is restricted from placing orders' });
         }
 
         const pricing = await calculateOrderPricing({ orderItems, couponCode, userId: req.user._id });
+        if (pricing.error) return res.status(400).json({ message: pricing.error });
         const items = pricing.normalizedItems || orderItems.map(i => ({
             name: i.name || 'Product',
             qty: i.qty,
@@ -596,14 +787,14 @@ exports.recordFailedPayment = async (req, res) => {
             user:            req.user._id,
             orderId,
             orderItems:      items,
-            shippingAddress: shippingAddress || 'Address not provided',
+            shippingAddress,
             totalPrice,
             couponCode:      pricing.couponCode || '',
             couponDiscount:  pricing.couponDiscount || 0,
             userDiscount:    pricing.userDiscountAmount || 0,
             customNote:      customNote || '',
             status:          'Pending Payment',
-            paymentMethod:   paymentMethod || 'Online',
+            paymentMethod:   'Online',
             paymentStatus:   'Failed',
             razorpayOrderId: razorpayOrderId || '',
             razorpayPaymentId: '',
@@ -620,39 +811,60 @@ exports.recordFailedPayment = async (req, res) => {
 
 // ── 12. USER CANCEL ORDER ────────────────────────────────────────────────────
 exports.userCancelOrder = async (req, res) => {
+    const session = await mongoose.startSession();
     try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-        if (order.user.toString() !== req.user._id.toString()) return res.status(401).json({ message: 'Not authorized' });
-
-        if (['Delivered', 'Shipped', 'Cancelled'].includes(order.status)) {
-            return res.status(400).json({ message: 'Cannot cancel an order that has already shipped or delivered' });
-        }
-
-        order.status = 'Cancelled';
-        const updated = await order.save();
-
-        // Replenish apparel variant stocks
-        for (const item of order.orderItems) {
-            if (item.size && item.size !== 'Standard') {
-                await Product.updateOne(
-                    { _id: item.product, 'variants.size': item.size },
-                    { $inc: { 'variants.$.stock': item.qty } }
-                );
+        let cancelledOrder;
+        await session.withTransaction(async () => {
+            const order = await Order.findById(req.params.id).session(session);
+            if (!order) throw Object.assign(new Error('Order not found'), { statusCode: 404 });
+            if (String(order.user) !== String(req.user._id)) throw Object.assign(new Error('Not authorized'), { statusCode: 403 });
+            if (['Delivered', 'Shipped', 'Cancelled', 'Returned', 'Exchanged'].includes(order.status)) {
+                throw Object.assign(new Error('This order can no longer be cancelled'), { statusCode: 409 });
             }
-        }
+            if (order.paymentMethod === 'Online' && order.paymentStatus === 'Paid') {
+                throw Object.assign(new Error('This online payment has already been captured. Contact support to arrange cancellation and a verified refund.'), { statusCode: 409 });
+            }
 
-        res.json(updated);
+            for (const item of order.orderItems) {
+                if (!item.size || item.size === 'Standard') continue;
+                const restored = await Product.updateOne(
+                    { _id: item.product, variants: { $elemMatch: { size: item.size, color: item.color || 'Standard' } } },
+                    { $inc: { 'variants.$[variant].stock': item.qty } },
+                    { arrayFilters: [{ 'variant.size': item.size, 'variant.color': item.color || 'Standard' }], session }
+                );
+                if (restored.modifiedCount !== 1) {
+                    throw Object.assign(new Error(`Inventory variant missing for ${item.name} (${item.size}, ${item.color || 'Standard'}). Cancellation was not committed; admin review is required.`), { statusCode: 409 });
+                }
+            }
+
+            order.status = 'Cancelled';
+            await order.save({ session });
+            cancelledOrder = order;
+        });
+        return res.json(cancelledOrder);
     } catch (error) {
-        console.error('Cancel order error:', error);
-        res.status(500).json({ message: error.message });
+        console.error('Cancel order transaction failed:', error);
+        return res.status(error.statusCode || 500).json({
+            message: error.statusCode ? error.message : 'Unable to cancel order safely. No inventory or order changes were committed.',
+        });
+    } finally {
+        await session.endSession();
     }
 };
 
 // ── 13. REQUEST SIZE EXCHANGE OR RETURN ──────────────────────────────────────
 exports.requestExchangeOrReturn = async (req, res) => {
     try {
-        const { orderId, productId, type, requestedSize, reason, images } = req.body;
+        const { orderId, productId, size, color, type, requestedSize, reason, images } = req.body;
+        if (!orderId || !productId || !['return', 'exchange'].includes(type) || typeof reason !== 'string' || !reason.trim() || reason.length > 1000) {
+            return res.status(400).json({ message: 'Valid order, product, request type and reason are required' });
+        }
+        if (type === 'exchange' && (!requestedSize || requestedSize.length > 20)) {
+            return res.status(400).json({ message: 'A valid requested size is required for exchange' });
+        }
+        if (images !== undefined && (!Array.isArray(images) || images.length > 5 || images.some((url) => typeof url !== 'string' || !url.startsWith('/uploads/')))) {
+            return res.status(400).json({ message: 'Invalid return images' });
+        }
         const order = await Order.findOne({ _id: orderId, user: req.user._id });
         if (!order) return res.status(404).json({ message: 'Order not found' });
 
@@ -660,10 +872,24 @@ exports.requestExchangeOrReturn = async (req, res) => {
             return res.status(400).json({ message: 'Exchanges or returns can only be requested after delivery' });
         }
 
-        const orderItem = order.orderItems.find(i => i.product.toString() === productId.toString());
+        const matchingItems = order.orderItems.filter(i => i.product.toString() === productId.toString());
+        if ((size === undefined || color === undefined) && matchingItems.length > 1) {
+            return res.status(400).json({ message: 'Select the exact purchased size and colour before submitting this request' });
+        }
+        const requestedOriginalSize = String(size || 'Standard');
+        const requestedOriginalColor = String(color || 'Standard');
+        const orderItem = matchingItems.find(i =>
+            String(i.size || 'Standard') === requestedOriginalSize &&
+            String(i.color || 'Standard') === requestedOriginalColor
+        );
         if (!orderItem) {
             return res.status(404).json({ message: 'Product not found in this order' });
         }
+
+        // The database enforces one request per order item. Include rejected requests
+        // here too so a retry returns a clear conflict instead of a duplicate-key 500.
+        const existingRequest = await ReturnRequest.findOne({ order: order._id, product: orderItem.product, user: req.user._id, originalSize: orderItem.size || 'Standard', originalColor: orderItem.color || 'Standard' });
+        if (existingRequest) return res.status(409).json({ message: 'A return or exchange request has already been recorded for this item. Contact support if it was rejected.' });
 
         const returnRequest = new ReturnRequest({
             order: order._id,
@@ -674,8 +900,9 @@ exports.requestExchangeOrReturn = async (req, res) => {
             product: orderItem.product,
             productName: orderItem.name,
             productImage: orderItem.image,
-            originalSize: orderItem.size,
-            originalColor: orderItem.color,
+            originalSize: requestedOriginalSize,
+            originalColor: requestedOriginalColor,
+            qty: orderItem.qty,
             type: type === 'exchange' ? 'exchange' : 'return',
             requestedSize: requestedSize || '',
             reason,

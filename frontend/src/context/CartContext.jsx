@@ -16,12 +16,12 @@ export const normalizeCartItem = (product) => {
     
     // Check variant override or discount price
     let price = product.price;
-    if (product.discountPrice && product.discountPrice > 0) {
+    if (product.discountPrice > 0 && product.discountPrice < product.price) {
         price = product.discountPrice;
     }
     if (Array.isArray(product.variants)) {
         const matchingVariant = product.variants.find(v => v.size === size && (v.color === color || color === 'Standard'));
-        if (matchingVariant && matchingVariant.price) {
+        if (matchingVariant && matchingVariant.price > 0 && !(product.discountPrice > 0 && product.discountPrice < product.price) && matchingVariant.price !== product.price) {
             price = matchingVariant.price;
         }
     }
@@ -45,7 +45,7 @@ export const normalizeCartItem = (product) => {
 
 export const CartProvider = ({ children }) => {
     const [cartItems, setCartItems] = useState(() => {
-        const savedCart = localStorage.getItem('trueThreadsCart') || localStorage.getItem('trueEatsCart');
+        const savedCart = localStorage.getItem('echoChasingCart') || localStorage.getItem('trueThreadsCart') || localStorage.getItem('trueEatsCart');
         if (savedCart) {
             try {
                 return JSON.parse(savedCart).map(normalizeCartItem);
@@ -57,7 +57,7 @@ export const CartProvider = ({ children }) => {
     });
 
     useEffect(() => {
-        localStorage.setItem('trueThreadsCart', JSON.stringify(cartItems));
+        localStorage.setItem('echoChasingCart', JSON.stringify(cartItems));
     }, [cartItems]);
 
     const addToCart = (product, qtyToAdd = 1, options = {}) => {
@@ -68,15 +68,29 @@ export const CartProvider = ({ children }) => {
             selectedColorHex: options.colorHex || product.selectedColorHex || product.colorHex,
         };
         const normalizedProduct = normalizeCartItem(itemToNormalize);
+        const variant = Array.isArray(product.variants)
+            ? product.variants.find(v => v.size === normalizedProduct.size &&
+                (normalizedProduct.color === 'Standard' || v.color === normalizedProduct.color))
+            : null;
+        const stock = variant ? Number(variant.stock || 0) : Number(product.stock || 0);
+        if (product.isAvailable === false || product.isHidden === true || stock <= 0) {
+            return { added: false, reason: 'This size and colour are currently unavailable.' };
+        }
 
+        let result = { added: false, reason: `Only ${stock} item(s) are available.` };
         setCartItems(prev => {
             const exist = prev.find((x) => x.cartId === normalizedProduct.cartId);
+            const currentQty = exist?.qty || 0;
+            const requestedQty = Math.max(1, Number(qtyToAdd) || 1);
+            const nextQty = Math.min(stock, currentQty + requestedQty);
+            if (nextQty <= currentQty) return prev;
+            result = { added: true, limited: nextQty < currentQty + requestedQty, available: stock - currentQty };
             if (exist) {
-                return prev.map((x) => x.cartId === normalizedProduct.cartId ? { ...exist, qty: exist.qty + qtyToAdd } : x);
-            } else {
-                return [...prev, { ...normalizedProduct, qty: qtyToAdd }];
+                return prev.map((x) => x.cartId === normalizedProduct.cartId ? { ...exist, qty: nextQty } : x);
             }
+            return [...prev, { ...normalizedProduct, qty: nextQty }];
         });
+        return result;
     };
 
     const removeFromCart = (product) => {

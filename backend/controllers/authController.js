@@ -9,9 +9,13 @@ const generateToken = require('../utils/generateToken');
 exports.registerUser = async (req, res) => {
   try {
     const { firstName, lastName, email, password, phoneNumber, altPhoneNumber, address } = req.body;
+    if (!firstName?.trim() || !lastName?.trim() || !email?.trim() || !/^\S+@\S+\.\S+$/.test(email) || typeof password !== 'string' || password.length < 12 || !phoneNumber?.trim()) {
+      return res.status(400).json({ message: 'Provide valid name, email, phone number and a password of at least 12 characters.' });
+    }
 
     // 1. Check if user already exists
-    const userExists = await User.findOne({ email });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const userExists = await User.findOne({ email: normalizedEmail });
     if (userExists) {
       return res.status(400).json({ message: 'User already exists' });
     }
@@ -27,7 +31,7 @@ exports.registerUser = async (req, res) => {
     const user = await User.create({
       firstName,
       lastName,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
       phoneNumber,
       altPhoneNumber,
@@ -85,9 +89,12 @@ exports.verifyEmail = async (req, res) => {
 exports.loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
+      return res.status(400).json({ message: 'Email and password are required.' });
+    }
 
     // 1. Find user by email
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
 
     if (user) {
       // 2. Check if Email is Verified (Crucial Security Step)
@@ -105,7 +112,7 @@ exports.loginUser = async (req, res) => {
           firstName: user.firstName,
           email: user.email,
           role: user.role, // This tells React if they are Admin or Customer
-          token: generateToken(user._id, user.role),
+          token: generateToken(user._id, user.role, user.tokenVersion || 0),
         });
       } else {
         res.status(401).json({ message: "Invalid email or password" });
@@ -122,7 +129,7 @@ exports.loginUser = async (req, res) => {
 // @route   GET /api/auth/profile
 exports.getUserProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const user = await User.findById(req.user._id).select('firstName lastName email phoneNumber altPhoneNumber address role isVerified createdAt');
     if (user) {
       res.json(user);
     } else {
@@ -140,10 +147,12 @@ exports.updateUserProfile = async (req, res) => {
     const user = await User.findById(req.user._id);
 
     if (user) {
-      user.firstName = req.body.firstName || user.firstName;
-      user.lastName = req.body.lastName || user.lastName;
-      user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
-      user.altPhoneNumber = req.body.altPhoneNumber || user.altPhoneNumber;
+      // Never allow self-service profile updates to alter role, verification,
+      // password hashes, reset tokens, or administrator flags.
+      const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'altPhoneNumber'];
+      for (const field of allowedFields) {
+        if (typeof req.body[field] === 'string') user[field] = req.body[field].trim();
+      }
 
       if (req.body.address) {
         user.address = {
@@ -157,7 +166,7 @@ exports.updateUserProfile = async (req, res) => {
       }
 
       const updatedUser = await user.save();
-      res.json({ message: 'Profile updated successfully', user: updatedUser });
+      res.json({ message: 'Profile updated successfully', user: { _id: updatedUser._id, firstName: updatedUser.firstName, lastName: updatedUser.lastName, email: updatedUser.email, phoneNumber: updatedUser.phoneNumber, altPhoneNumber: updatedUser.altPhoneNumber, address: updatedUser.address, role: updatedUser.role, isVerified: updatedUser.isVerified } });
     } else {
       res.status(404).json({ message: 'User not found' });
     }
@@ -212,13 +221,14 @@ exports.resetPassword = async (req, res) => {
     }
 
     // Validate that a new password was actually provided
-    if (!req.body.password || req.body.password.trim().length === 0) {
-      return res.status(400).json({ message: 'Password cannot be empty' });
+    if (typeof req.body.password !== 'string' || req.body.password.length < 12) {
+      return res.status(400).json({ message: 'Password must be at least 12 characters long' });
     }
 
     // Hash the new password and save
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(req.body.password, salt);
+    user.tokenVersion = (user.tokenVersion || 0) + 1;
 
     // Clear the reset fields so the token can't be used again
     user.resetPasswordToken = undefined;

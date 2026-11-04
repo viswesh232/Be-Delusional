@@ -26,21 +26,25 @@ const qtyBtnStyle = {
 };
 
 // ─── Shared bill HTML builder ─────────────────────────────────────────────────
+const escapeHtml = (value = '') => String(value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', [String.fromCharCode(39)]: '&#39;',
+}[char]));
+
 const buildBillHtml = (bill) => {
     const rows = bill.items.map(item => `
         <div style="display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;">
-            <span>${item.qty}x ${item.name}</span>
-            <span>Rs.${(item.price * item.qty).toFixed(2)}</span>
+            <span>${Number(item.qty) || 0}x ${escapeHtml(item.name)}</span>
+            <span>₹${(Number(item.price || 0) * Number(item.qty || 0)).toFixed(2)}</span>
         </div>`).join('');
     return `
         <div style="font-family:'Courier New',monospace;color:#222;padding:12px 16px;">
             <div style="text-align:center;border-bottom:2px dashed #000;padding-bottom:8px;margin-bottom:8px;">
-                <h3 style="margin:0;letter-spacing:2px;font-size:15px;">TRUE EATS</h3>
-                <p style="margin:2px 0;font-size:10px;opacity:.7;">The way food was meant to be</p>
+                <h3 style="margin:0;letter-spacing:2px;font-size:15px;">ECHO CHASING</h3>
+                <p style="margin:2px 0;font-size:10px;opacity:.7;">Less noise. More meaning. Always moving.</p>
             </div>
-            <p style="font-size:11px;margin:3px 0;"><b>Bill No:</b> ${bill.orderId}</p>
-            <p style="font-size:11px;margin:3px 0;"><b>Customer:</b> ${bill.customerName}</p>
-            ${bill.address ? `<p style="font-size:11px;margin:3px 0;"><b>Address:</b> ${bill.address}</p>` : ''}
+            <p style="font-size:11px;margin:3px 0;"><b>Bill No:</b> ${escapeHtml(bill.orderId)}</p>
+            <p style="font-size:11px;margin:3px 0;"><b>Customer:</b> ${escapeHtml(bill.customerName)}</p>
+            ${bill.address ? `<p style="font-size:11px;margin:3px 0;"><b>Address:</b> ${escapeHtml(bill.address)}</p>` : ''}
             <p style="font-size:11px;margin:3px 0;"><b>Date:</b> ${new Date().toLocaleString()}</p>
             <hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/>
             ${rows}
@@ -50,9 +54,9 @@ const buildBillHtml = (bill) => {
             ${bill.couponDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#16a34a;"><span>Coupon Discount</span><span>Rs.-${bill.couponDiscount.toFixed(2)}</span></div>` : ''}
             ${bill.userDiscount > 0 ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;color:#16a34a;"><span>First-order Discount</span><span>Rs.-${bill.userDiscount.toFixed(2)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;font-weight:bold;font-size:14px;margin-top:4px;border-top:1px solid #000;padding-top:4px;"><span>TOTAL</span><span>Rs.${bill.total.toFixed(2)}</span></div>
-            ${bill.adminNote ? `<hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/><p style="font-size:11px;margin:3px 0;font-style:italic;"><b>Note:</b> ${bill.adminNote}</p>` : ''}
+            ${bill.adminNote ? `<hr style="border:none;border-top:1px dashed #000;margin:8px 0;"/><p style="font-size:11px;margin:3px 0;font-style:italic;"><b>Note:</b> ${escapeHtml(bill.adminNote)}</p>` : ''}
             <div style="text-align:center;border-top:1px dashed #000;margin-top:8px;padding-top:6px;font-size:10px;opacity:.7;">
-                <p style="margin:2px 0;">Thank you for choosing True Eats!</p>
+                <p style="margin:2px 0;">Thank you for choosing Echo Chasing.</p>
                 <p style="margin:2px 0;">Visit us again ♥</p>
             </div>
         </div>`;
@@ -107,7 +111,7 @@ const triggerBulkPrint = (bills) => {
 const BillPreview = ({ bill, onPrint }) => (
     <div style={{ backgroundColor: colors.white, borderRadius: '24px', padding: '30px', boxShadow: '0 15px 40px rgba(0,0,0,0.06)', border: `1px solid ${colors.peach}` }}>
         <div style={{ textAlign: 'center', borderBottom: '2px dashed #ddd', paddingBottom: '16px', marginBottom: '16px' }}>
-            <h2 style={{ margin: 0, letterSpacing: '3px', color: colors.forest }}>TRUE EATS</h2>
+            <h2 style={{ margin: 0, letterSpacing: '3px', color: colors.forest }}>ECHO CHASING</h2>
             <p style={{ margin: '4px 0', fontSize: '12px', color: colors.slate }}>The way food was meant to be</p>
         </div>
 
@@ -576,7 +580,7 @@ const BulkPrintMode = () => {
         if (exists) {
             setSelected(selected.filter(x => x._id !== o._id));
         } else {
-            if (selected.length >= 6) return alert('Maximum 6 orders can be printed at once');
+            if (selected.length >= 4) return alert('Maximum 4 orders can be printed on one A4 sheet');
             setSelected([...selected, o]);
         }
     };
@@ -644,7 +648,7 @@ const BulkPrintMode = () => {
                     {filteredList.length === 0 && <p style={{ fontSize: '13px', color: colors.slate, textAlign: 'center', padding: '20px 0' }}>No orders found</p>}
                     {filteredList.map(o => {
                         const isSelected = !!selected.find(x => x._id === o._id);
-                        const isDisabled = !isSelected && selected.length >= 8;
+                        const isDisabled = !isSelected && selected.length >= 4;
                         return (
                             <div key={o._id} onClick={() => !isDisabled && toggle(o)} style={{
                                 padding: '10px 12px', borderRadius: '12px', cursor: isDisabled ? 'not-allowed' : 'pointer',
@@ -680,8 +684,8 @@ const BulkPrintMode = () => {
                 {selected.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: '60px 20px', color: colors.slate, backgroundColor: colors.white, borderRadius: '20px' }}>
                         <Printer size={50} style={{ opacity: 0.15, display: 'block', margin: '0 auto 16px' }} />
-                        <p style={{ fontSize: '14px' }}>Select 1–6 orders from the list to bulk print</p>
-                        <p style={{ fontSize: '12px', opacity: 0.6 }}>All 6 bills will fit on one A4 page, 2 per row</p>
+                        <p style={{ fontSize: '14px' }}>Select 1–4 orders from the list to bulk print</p>
+                        <p style={{ fontSize: '12px', opacity: 0.6 }}>Up to 4 bills fit on one A4 page, 2 per row</p>
                     </div>
                 ) : (
                     <>
@@ -695,7 +699,7 @@ const BulkPrintMode = () => {
                                         width: '22px', height: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px'
                                     }}>✕</button>
                                     <div style={{ textAlign: 'center', borderBottom: '1px dashed #ddd', paddingBottom: '8px', marginBottom: '8px' }}>
-                                        <div style={{ fontWeight: '900', letterSpacing: '2px', color: colors.forest, fontSize: '13px' }}>TRUE EATS</div>
+                                        <div style={{ fontWeight: '900', letterSpacing: '2px', color: colors.forest, fontSize: '13px' }}>ECHO CHASING</div>
                                     </div>
                                     <div style={{ color: colors.slate, lineHeight: '1.7' }}>
                                         <div><b>#{o.orderId}</b></div>

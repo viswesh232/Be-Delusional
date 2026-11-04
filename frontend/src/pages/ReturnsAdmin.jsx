@@ -40,6 +40,50 @@ export default function ReturnsAdmin() {
         }
     };
 
+    const [refundBusyId, setRefundBusyId] = useState('');
+    const [refundMessage, setRefundMessage] = useState('');
+    const [exchangeCourier, setExchangeCourier] = useState('');
+    const [exchangeTracking, setExchangeTracking] = useState('');
+
+    const handleRefund = async (request) => {
+        if (!window.confirm(`Check or initiate the Razorpay refund for ${request.orderId}? Only continue after the returned item has been inspected.`)) return;
+        setRefundBusyId(request._id);
+        setRefundMessage('');
+        try {
+            const { data } = await API.post(`/returns/${request._id}/refund`);
+            setRefundMessage(`Refund ${data.refundStatus || 'status checked'} — ${data.refundId || 'provider confirmation pending'}`);
+            await fetchReturns();
+        } catch (err) {
+            setRefundMessage(err.response?.data?.message || 'Refund could not be verified. Check Razorpay before retrying.');
+        } finally {
+            setRefundBusyId('');
+        }
+    };
+
+    const handleExchangeFulfillment = async (request) => {
+        if (!exchangeCourier.trim() || !/^[A-Za-z0-9-]{4,50}$/.test(exchangeTracking.trim())) {
+            setRefundMessage('Enter a courier name and a tracking ID (4–50 letters, numbers or hyphens).');
+            return;
+        }
+        if (!window.confirm('Reserve the requested replacement size from stock and record this shipment?')) return;
+        setRefundBusyId(request._id);
+        setRefundMessage('');
+        try {
+            const { data } = await API.post(`/returns/${request._id}/exchange-fulfillment`, {
+                courierName: exchangeCourier.trim(),
+                trackingId: exchangeTracking.trim(),
+            });
+            setRefundMessage(data.message);
+            setExchangeCourier('');
+            setExchangeTracking('');
+            await fetchReturns();
+        } catch (err) {
+            setRefundMessage(err.response?.data?.message || 'Exchange fulfilment failed. Check inventory and try again.');
+        } finally {
+            setRefundBusyId('');
+        }
+    };
+
     const filtered = requests.filter(r => {
         const matchesFilter = filter === 'All' || r.status === filter || (filter === 'exchange' && r.type === 'exchange') || (filter === 'return' && r.type === 'return');
         const matchesSearch = !searchTerm.trim() || 
@@ -140,6 +184,8 @@ export default function ReturnsAdmin() {
                     </div>
                 </div>
 
+                {refundMessage && <div role="status" style={{ marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', background: '#f1f5f9', color: '#334155', fontSize: '13px' }}>{refundMessage}</div>}
+
                 {/* Table */}
                 <div style={{
                     background: '#ffffff', borderRadius: '16px', border: '1px solid #e2e8f0',
@@ -200,18 +246,43 @@ export default function ReturnsAdmin() {
                                         <td style={{ padding: '14px 18px' }}>
                                             <select
                                                 value={req.status}
+                                                disabled={['Completed', 'Rejected'].includes(req.status)}
                                                 onChange={e => handleUpdateStatus(req._id, e.target.value)}
                                                 style={{
                                                     padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1',
                                                     fontSize: '13px', background: '#ffffff', cursor: 'pointer'
                                                 }}
                                             >
-                                                <option value="Pending">Pending</option>
-                                                <option value="Approved">Approved</option>
-                                                <option value="Pickup Scheduled">Pickup Scheduled</option>
-                                                <option value="Completed">Completed</option>
-                                                <option value="Rejected">Rejected</option>
+                                                <option value={req.status}>{req.status}</option>
+                                                {(req.status === 'Pending' ? ['Approved', 'Rejected']
+                                                    : req.status === 'Approved' ? ['Pickup Scheduled', 'Rejected']
+                                                    : req.status === 'Pickup Scheduled' ? ['Inspected', 'Rejected']
+                                                    : req.status === 'Inspected' ? (req.type === 'return' || req.replacementShippedAt ? ['Completed', 'Rejected'] : ['Rejected'])
+                                                    : []).map(next => <option key={next} value={next}>{next}</option>)}
                                             </select>
+                                            {req.type === 'exchange' && req.status === 'Inspected' && !req.replacementStockReservedAt && (
+                                                <div style={{ display: 'grid', gap: '6px', marginTop: '8px', minWidth: '180px' }}>
+                                                    <input aria-label="Replacement courier" placeholder="Courier name" value={exchangeCourier} onChange={e => setExchangeCourier(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} />
+                                                    <input aria-label="Replacement tracking ID" placeholder="Tracking ID" value={exchangeTracking} onChange={e => setExchangeTracking(e.target.value)} style={{ padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: '6px', fontSize: '12px' }} />
+                                                    <button type="button" disabled={refundBusyId === req._id} onClick={() => handleExchangeFulfillment(req)} style={{ padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: '#09090b', color: '#fff', fontSize: '12px', fontWeight: 700 }}>
+                                                        {refundBusyId === req._id ? 'Processing…' : 'Reserve & Dispatch'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            {req.replacementTrackingId && <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>Replacement: {req.replacementCourier} · {req.replacementTrackingId}</div>}
+                                            {req.type === 'return' && req.status === 'Inspected' && req.refundStatus !== 'Processed' && (
+                                                <button
+                                                    type="button"
+                                                    disabled={refundBusyId === req._id}
+                                                    onClick={() => handleRefund(req)}
+                                                    style={{ display: 'block', marginTop: '8px', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: '6px', background: refundBusyId === req._id ? '#e2e8f0' : '#09090b', color: refundBusyId === req._id ? '#64748b' : '#fff', fontSize: '12px', fontWeight: 700, cursor: refundBusyId === req._id ? 'wait' : 'pointer' }}
+                                                >
+                                                    {refundBusyId === req._id ? 'Checking…' : req.refundStatus === 'Pending' ? 'Check refund' : 'Issue / Check refund'}
+                                                </button>
+                                            )}
+                                            {req.refundStatus && req.refundStatus !== 'Not Required' && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>Refund: {req.refundStatus}</div>
+                                            )}
                                         </td>
                                     </tr>
                                 ))

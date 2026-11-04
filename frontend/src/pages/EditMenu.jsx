@@ -37,34 +37,39 @@ export default function EditMenu() {
 
     // Form state
     const [formData, setFormData] = useState({
-        name: '',
-        brand: 'True Threads',
-        price: '',
+        name: 'Project 001 — Oversized T-Shirt',
+        brand: 'Echo Chasing',
+        price: '1499',
         discountPrice: '',
         category: 'T-Shirts',
         subCategory: 'Oversized',
         gender: 'Unisex',
         description: '',
-        material: '100% Combed Cotton, 240 GSM',
+        material: 'Cotton',
         fit: 'Oversized Fit',
         careInstructions: 'Machine wash cold. Do not tumble dry.',
         modelStats: '',
         isAvailable: true,
         isNewDrop: true,
         isBestseller: false,
-        selectedSizes: ['S', 'M', 'L', 'XL'],
+        selectedSizes: ['S', 'M', 'L', 'XL', 'XXL'],
         colorName: 'Black',
         colorHex: '#09090b',
-        stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+        stockPerSize: {}
     });
 
     const [urlImages, setUrlImages] = useState(['']);
     const [fileImages, setFileImages] = useState([]);
+    const [filePreviews, setFilePreviews] = useState([]);
+
+    useEffect(() => () => {
+        filePreviews.forEach(preview => URL.revokeObjectURL(preview.url));
+    }, [filePreviews]);
 
     const fetchProducts = async () => {
         try {
             setLoading(true);
-            const res = await API.get('/products?all=true');
+            const res = await API.get('/products/admin/all?all=true');
             setProducts(res.data);
         } catch (err) {
             console.error('Failed to fetch products', err);
@@ -85,8 +90,8 @@ export default function EditMenu() {
                 : [...prev.selectedSizes, size];
             
             const newStock = { ...prev.stockPerSize };
-            if (!exists && !newStock[size]) {
-                newStock[size] = 20;
+            if (!exists && newStock[size] === undefined) {
+                newStock[size] = 0;
             }
             return { ...prev, selectedSizes: updated, stockPerSize: newStock };
         });
@@ -101,53 +106,58 @@ export default function EditMenu() {
 
     const resetForm = () => {
         setFormData({
-            name: '',
-            brand: 'True Threads',
-            price: '',
+            name: 'Project 001 — Oversized T-Shirt',
+            brand: 'Echo Chasing',
+            price: '1499',
             discountPrice: '',
             category: 'T-Shirts',
             subCategory: 'Oversized',
             gender: 'Unisex',
             description: '',
-            material: '100% Combed Cotton, 240 GSM',
+            material: 'Cotton',
             fit: 'Oversized Fit',
             careInstructions: 'Machine wash cold. Do not tumble dry.',
             modelStats: '',
             isAvailable: true,
             isNewDrop: true,
             isBestseller: false,
-            selectedSizes: ['S', 'M', 'L', 'XL'],
+            selectedSizes: ['S', 'M', 'L', 'XL', 'XXL'],
             colorName: 'Black',
             colorHex: '#09090b',
-            stockPerSize: { 'S': 20, 'M': 25, 'L': 30, 'XL': 15 }
+            stockPerSize: {}
         });
         setUrlImages(['']);
         setFileImages([]);
+        setFilePreviews([]);
         setEditingId(null);
     };
 
     const handleEditClick = (p) => {
         setEditingId(p._id);
-        const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL'];
+        const sizes = (p.sizes && p.sizes.length > 0) ? p.sizes : ['S', 'M', 'L', 'XL', 'XXL'];
         const stockMap = {};
+        const selectedColor = p.colors?.[0]?.name || p.variants?.[0]?.color || 'Black';
         if (Array.isArray(p.variants)) {
-            p.variants.forEach(v => {
-                stockMap[v.size] = v.stock;
-            });
-        } else {
-            sizes.forEach(s => stockMap[s] = 20);
+            p.variants
+                .filter(v => (v.color || 'Standard') === selectedColor)
+                .forEach(v => {
+                    stockMap[v.size] = v.stock;
+                });
         }
+        sizes.forEach(size => {
+            if (stockMap[size] === undefined) stockMap[size] = 0;
+        });
 
         setFormData({
             name: p.name || '',
-            brand: p.brand || 'True Threads',
+            brand: p.brand || 'Echo Chasing',
             price: p.price || '',
             discountPrice: p.discountPrice || '',
             category: p.category || 'T-Shirts',
             subCategory: p.subCategory || '',
             gender: p.gender || 'Unisex',
             description: p.description || '',
-            material: p.material || '100% Cotton',
+            material: p.material || 'Cotton',
             fit: p.fit || 'Regular Fit',
             careInstructions: p.careInstructions || '',
             modelStats: p.modelStats || '',
@@ -155,29 +165,41 @@ export default function EditMenu() {
             isNewDrop: p.isNewDrop ?? false,
             isBestseller: p.isBestseller ?? false,
             selectedSizes: sizes,
-            colorName: p.colors?.[0]?.name || 'Black',
-            colorHex: p.colors?.[0]?.hex || '#09090b',
+            colorName: selectedColor,
+            colorHex: p.colors?.find(color => color.name === selectedColor)?.hex || p.variants?.find(v => v.color === selectedColor)?.colorHex || '#09090b',
             stockPerSize: stockMap
         });
 
         setUrlImages(p.images && p.images.length > 0 ? p.images : ['']);
         setFileImages([]);
+        setFilePreviews([]);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const variants = formData.selectedSizes.map(size => ({
-                sku: `${formData.name.substring(0, 3).toUpperCase()}-${size}`,
+            const editedColorVariants = formData.selectedSizes.map(size => ({
+                sku: `${formData.name.substring(0, 3).toUpperCase()}-${formData.colorName.substring(0, 3).toUpperCase()}-${size}`,
                 size,
                 color: formData.colorName,
                 colorHex: formData.colorHex,
-                stock: formData.stockPerSize[size] ?? 20,
-                price: Number(formData.price)
+                stock: Math.max(0, Number(formData.stockPerSize[size]) || 0),
+                price: undefined
             }));
+            // This form edits one colour at a time. Preserve every other colour's
+            // variants so saving a product cannot silently erase their inventory.
+            const preservedVariants = editingId
+                ? (products.find(product => product._id === editingId)?.variants || [])
+                    .filter(variant => (variant.color || 'Standard') !== formData.colorName)
+                : [];
+            const variants = [...preservedVariants, ...editedColorVariants];
 
-            const colors = [{ name: formData.colorName, hex: formData.colorHex }];
+            const existingColors = editingId
+                ? (products.find(product => product._id === editingId)?.colors || [])
+                    .filter(color => color.name !== formData.colorName)
+                : [];
+            const colors = [...existingColors, { name: formData.colorName, hex: formData.colorHex }];
 
             const fd = new FormData();
             fd.append('name', formData.name);
@@ -199,14 +221,16 @@ export default function EditMenu() {
             fd.append('sizes', JSON.stringify(formData.selectedSizes));
             fd.append('colors', JSON.stringify(colors));
             fd.append('variants', JSON.stringify(variants));
+            // Explicitly replace the gallery on edit, including when the admin clears it.
+            fd.append('replaceImages', 'true');
 
             urlImages.filter(u => u && u.trim()).forEach(u => fd.append('urlImages', u.trim()));
             fileImages.forEach(f => fd.append('images', f));
 
             if (editingId) {
-                await API.put(`/products/${editingId}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.put(`/products/${editingId}`, fd, {});
             } else {
-                await API.post('/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                await API.post('/products', fd, {});
             }
 
             resetForm();
@@ -218,7 +242,7 @@ export default function EditMenu() {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Delete this product from catalog?')) return;
+        if (!window.confirm('Archive this product? It will disappear from the shop, while past orders and invoices remain intact.')) return;
         try {
             await API.delete(`/products/${id}`);
             fetchProducts();
@@ -285,14 +309,14 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Product Title *</label>
                                 <input 
-                                    style={inp} required placeholder="e.g. Heavyweight Oversized Tee"
+                                    style={inp} required placeholder="Project 001 — Oversized T-Shirt"
                                     value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })}
                                 />
                             </div>
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Brand</label>
                                 <input 
-                                    style={inp} placeholder="True Threads"
+                                    style={inp} placeholder="Echo Chasing"
                                     value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })}
                                 />
                             </div>
@@ -325,7 +349,7 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Regular Price (₹) *</label>
                                 <input 
-                                    type="number" style={inp} required placeholder="1299"
+                                    type="number" style={inp} required placeholder="1499"
                                     value={formData.price} onChange={e => setFormData({ ...formData, price: e.target.value })}
                                 />
                             </div>
@@ -403,7 +427,7 @@ export default function EditMenu() {
                             <div>
                                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px' }}>Material / Fabric</label>
                                 <input 
-                                    style={inp} placeholder="100% Combed Cotton, 240 GSM"
+                                    style={inp} placeholder="Cotton"
                                     value={formData.material} onChange={e => setFormData({ ...formData, material: e.target.value })}
                                 />
                             </div>
@@ -472,8 +496,32 @@ export default function EditMenu() {
                                 }}>
                                     <Upload size={16} /> Upload Photos from Computer
                                     <input 
-                                        type="file" multiple accept="image/*" style={{ display: 'none' }}
-                                        onChange={e => setFileImages(Array.from(e.target.files))}
+                                        type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp" style={{ display: 'none' }}
+                                        onChange={e => {
+                                            const selected = Array.from(e.target.files || []);
+                                            const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                                            if (selected.some(file => !allowed.includes(file.type))) {
+                                                alert('Choose JPG, PNG, GIF or WEBP photos only.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            if (selected.some(file => file.size > 5 * 1024 * 1024)) {
+                                                alert('Each photo must be 5 MB or smaller.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            if (selected.length + fileImages.length > 20) {
+                                                alert('You can upload a maximum of 20 photos at a time.');
+                                                e.target.value = '';
+                                                return;
+                                            }
+                                            setFileImages(previous => [...previous, ...selected]);
+                                            setFilePreviews(previous => [...previous, ...selected.map(file => ({
+                                                name: file.name,
+                                                url: URL.createObjectURL(file)
+                                            }))]);
+                                            e.target.value = '';
+                                        }}
                                     />
                                 </label>
                                 {fileImages.length > 0 && (
@@ -482,6 +530,29 @@ export default function EditMenu() {
                                     </span>
                                 )}
                             </div>
+
+                            {(urlImages.some(url => url.trim()) || filePreviews.length > 0) && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(105px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                                    {urlImages.filter(url => url.trim()).map((url, index) => (
+                                        <div key={`url-${index}`} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                                            <img src={getImageUrl(url.trim())} alt={`Product preview ${index + 1}`} style={{ width: '100%', height: '120px', objectFit: 'cover' }} />
+                                            <div style={{ padding: '5px 7px', fontSize: '11px', color: '#64748b' }}>Image URL</div>
+                                        </div>
+                                    ))}
+                                    {filePreviews.map((preview, index) => (
+                                        <div key={`file-${index}-${preview.name}`} style={{ position: 'relative', border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', background: '#fff' }}>
+                                            <img src={preview.url} alt={preview.name} style={{ width: '100%', height: '120px', objectFit: 'cover' }} />
+                                            <button type="button" onClick={() => {
+                                                setFileImages(previous => previous.filter((_, fileIndex) => fileIndex !== index));
+                                                setFilePreviews(previous => previous.filter((_, previewIndex) => previewIndex !== index));
+                                            }} style={{ position: 'absolute', top: '5px', right: '5px', border: 0, borderRadius: '50%', width: '25px', height: '25px', background: '#fff', cursor: 'pointer' }} aria-label={`Remove ${preview.name}`}>
+                                                <X size={14} />
+                                            </button>
+                                            <div style={{ padding: '5px 7px', fontSize: '11px', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.name}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Merchandising Badges */}

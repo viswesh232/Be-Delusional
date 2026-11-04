@@ -7,6 +7,10 @@ const connectDB = async () => {
     try {
         const mongoUri = process.env.MONGO_URI && process.env.MONGO_URI.trim() ? process.env.MONGO_URI.trim() : '';
 
+        if (!mongoUri && process.env.NODE_ENV === 'production') {
+            throw new Error('MONGO_URI is required in production. Refusing to start with temporary in-memory storage.');
+        }
+
         if (!mongoUri) {
             memoryServer = await MongoMemoryServer.create();
             const uri = memoryServer.getUri();
@@ -19,7 +23,7 @@ const connectDB = async () => {
         console.log(`MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
         const mongoUri = process.env.MONGO_URI && process.env.MONGO_URI.trim() ? process.env.MONGO_URI.trim() : '';
-        const shouldUseMemoryFallback = mongoUri.includes('127.0.0.1') || mongoUri.includes('localhost') || !mongoUri;
+        const shouldUseMemoryFallback = process.env.NODE_ENV !== 'production' && (mongoUri.includes('127.0.0.1') || mongoUri.includes('localhost') || !mongoUri);
 
         if (shouldUseMemoryFallback && error && error.message && error.message.includes('ECONNREFUSED')) {
             try {

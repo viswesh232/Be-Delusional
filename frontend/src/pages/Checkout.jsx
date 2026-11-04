@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
@@ -7,14 +7,14 @@ import { MapPin, CreditCard, ArrowLeft, Shield, Tag, X, Edit3, MessageSquare, Lo
 import { getImageUrl, formatPrice } from '../utils/helpers';
 
 const colors = {
-    primary: '#472b29',
-    accent: '#218856',
-    background: '#f9fafb',
-    surface: '#ffffff',
-    ink: '#111827',
-    muted: '#6b7280',
-    border: '#e5e7eb',
-    softAccent: '#f0fdf4',
+    primary: '#171714',
+    accent: '#8C8278',
+    background: '#F4F1EB',
+    surface: '#FBFAF7',
+    ink: '#171714',
+    muted: '#77766f',
+    border: '#D8D2C8',
+    softAccent: '#EAE5DC',
 };
 
 
@@ -42,6 +42,7 @@ const Checkout = () => {
     const [settings, setSettings] = useState(null);
     const [paymentMethod, setPaymentMethod] = useState('Online');
     const [loading, setLoading] = useState(false);
+    const checkoutInProgress = useRef(false);
     const [userDiscount, setUserDiscount] = useState(location.state?.userDiscount || null);
 
     // Initial state from Cart Drawer
@@ -191,10 +192,13 @@ const Checkout = () => {
     });
 
     const handleOnlinePayment = async () => {
+        if (checkoutInProgress.current) return;
+        checkoutInProgress.current = true;
         setLoading(true);
         const sdkLoaded = await loadRazorpay();
         if (!sdkLoaded || !window.Razorpay) {
             alert('Payment gateway could not be loaded. Disable ad blockers or choose Cash on Delivery.');
+            checkoutInProgress.current = false;
             setLoading(false); return;
         }
 
@@ -207,7 +211,7 @@ const Checkout = () => {
 
             const options = {
                 key: rzpOrder.key_id, amount: rzpOrder.amount, currency: rzpOrder.currency,
-                name: 'True Eats', description: `${cartItems.reduce((c, i) => c + i.qty, 0)} item(s)`, order_id: rzpOrder.razorpayOrderId,
+                name: 'Echo Chasing', description: `${cartItems.reduce((c, i) => c + i.qty, 0)} item(s)`, order_id: rzpOrder.razorpayOrderId,
                 prefill: {
                     name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                     email: user.email || '', contact: user.phoneNumber || user.phone || '',
@@ -220,20 +224,36 @@ const Checkout = () => {
                             razorpayPaymentId: response.razorpay_payment_id,
                             razorpaySignature: response.razorpay_signature,
                         });
-                        const { data: order } = await API.post('/orders', payload);
-                        navigate('/payment-success', { state: { order, clearCart: true } });
+                        let orderResponse;
+                        try {
+                            orderResponse = await API.post('/orders', payload);
+                        } catch (firstError) {
+                            // Retry the same captured payment once. The backend treats
+                            // duplicate submissions idempotently if the first save succeeded.
+                            await new Promise(resolve => setTimeout(resolve, 900));
+                            orderResponse = await API.post('/orders', payload);
+                        }
+                        clearCart();
+                        navigate('/payment-success', { state: { order: orderResponse.data, clearCart: true } });
                     } catch (err) {
+                        checkoutInProgress.current = false;
+                        setLoading(false);
                         navigate('/payment-success', {
-                            state: { failed: true, reason: `Payment succeeded but order placement failed. ID: ${response.razorpay_payment_id}. Contact support.` },
+                            state: {
+                                failed: true,
+                                paymentCaptured: true,
+                                paymentId: response.razorpay_payment_id,
+                                reason: `Your payment was captured, but the order could not be confirmed automatically. Payment ID: ${response.razorpay_payment_id}. Do not pay again. Contact support with this ID.`,
+                            },
                         });
                     }
                 },
-                modal: { ondismiss: () => setLoading(false) },
+                modal: { ondismiss: () => { checkoutInProgress.current = false; setLoading(false); } },
             };
 
             let rzp = new window.Razorpay(options);
             rzp.on('payment.failed', async (response) => {
-                rzp.close(); setLoading(false);
+                rzp.close(); checkoutInProgress.current = false; setLoading(false);
                 try {
                     await API.post('/orders/record-failed', buildOrderPayload({
                         razorpayOrderId: rzpOrder.razorpayOrderId, failureReason: response.error?.description || 'Payment Failed', paymentMethod: 'Online'
@@ -244,23 +264,52 @@ const Checkout = () => {
             });
             rzp.open();
         } catch (err) {
-            alert(`Could not start payment: ${err.response?.data?.message || err.message}`);
+            const serverMessage = err.response?.data?.message;
+            const gatewayDetail = err.response?.data?.error;
+            const diagnostic = gatewayDetail
+                ? `${serverMessage || 'Payment initiation failed'} — ${gatewayDetail}`
+                : serverMessage || err.message || 'Unknown payment error';
+            console.error('Payment initiation failed:', {
+                status: err.response?.status,
+                message: serverMessage,
+                gatewayDetail,
+                code: err.response?.data?.code,
+            });
+            alert(`Could not start payment: ${diagnostic}`);
+            checkoutInProgress.current = false;
             setLoading(false);
         }
     };
 
     const handleCOD = async () => {
+        if (checkoutInProgress.current) return;
+        checkoutInProgress.current = true;
         setLoading(true);
         try {
             const { data: order } = await API.post('/orders', buildOrderPayload({ paymentMethod: 'COD' }));
+            clearCart();
             navigate('/payment-success', { state: { order, clearCart: true } });
         } catch (err) { alert(`Order failed: ${err.response?.data?.message || 'Server error'}`); }
+        checkoutInProgress.current = false;
         setLoading(false);
     };
 
     const handlePay = () => {
-        if (!address.phone) {
-            alert('Please enter your phone number in the Contact section.');
+        if (checkoutInProgress.current) return;
+        const phoneDigits = String(address.phone || '').replace(/\D/g, '');
+        const normalizedPhone = phoneDigits.length === 12 && phoneDigits.startsWith('91')
+            ? phoneDigits.slice(2)
+            : phoneDigits;
+        if (!/^[6-9]\d{9}$/.test(normalizedPhone)) {
+            alert('Enter a valid 10-digit Indian mobile number (with or without +91).');
+            return;
+        }
+        if (!/^[1-9]\d{5}$/.test(String(address.pincode).trim())) {
+            alert('Enter a valid 6-digit PIN code.');
+            return;
+        }
+        if (!address.firstName.trim() || !address.lastName.trim() || !address.state.trim()) {
+            alert('Please complete your name and state.');
             return;
         }
         if (!address.colony || !address.city || !address.pincode) {
@@ -283,8 +332,8 @@ const Checkout = () => {
                 <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', color: colors.muted, fontWeight: 600, fontSize: '14px' }}>
                     <ArrowLeft size={16} /> Return to Store
                 </button>
-                <div style={{ fontWeight: 900, fontSize: '24px', color: colors.primary, letterSpacing: '-0.5px' }}>
-                    True<span style={{ color: colors.accent }}>Eats</span>
+                <div style={{ fontWeight: 700, fontSize: '20px', color: colors.primary, letterSpacing: '-1px' }}>
+                    ECHO<span style={{ color: colors.accent }}>CHASING</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: colors.accent, fontWeight: 700, fontSize: '13px' }}>
                     <Lock size={14} /> Secure Checkout

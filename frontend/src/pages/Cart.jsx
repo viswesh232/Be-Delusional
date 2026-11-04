@@ -4,13 +4,7 @@ import API from '../api/axios';
 import { AuthContext } from '../context/AuthContext';
 import { CartContext } from '../context/CartContext';
 import { Trash2, Minus, Plus, X, Tag, ChevronRight, Truck, CheckCircle, ArrowLeft } from 'lucide-react';
-
-const backendUrl = API.defaults.baseURL.replace('/api', '');
-const getImageUrl = (url) => {
-    if (!url) return '';
-    if (url.startsWith('/uploads')) return `${backendUrl}${url}`;
-    return url;
-};
+import { getImageUrl } from '../utils/helpers';
 
 const formatPrice = (amount) => new Intl.NumberFormat('en-IN', {
     style: 'currency',

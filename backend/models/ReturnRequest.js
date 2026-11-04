@@ -11,9 +11,14 @@ const returnRequestSchema = new mongoose.Schema({
     productImage:   { type: String, default: '' },
     originalSize:   { type: String, default: '' },
     originalColor:  { type: String, default: '' },
+    qty:            { type: Number, default: 1, min: 1 },
 
     type:           { type: String, enum: ['exchange', 'return'], required: true },
     requestedSize:  { type: String, default: '' }, // For exchanges
+    replacementCourier: { type: String, default: '' },
+    replacementTrackingId: { type: String, default: '' },
+    replacementShippedAt: { type: Date },
+    replacementStockReservedAt: { type: Date },
     reason:         { type: String, required: true },
     images:         { type: [String], default: [] }, // Customer uploaded proof / tags
     status: {
@@ -23,6 +28,14 @@ const returnRequestSchema = new mongoose.Schema({
     },
     adminNotes:     { type: String, default: '' },
     refundAmount:   { type: Number, default: 0 },
+    razorpayRefundId: { type: String, default: '' },
+    refundStatus:   { type: String, enum: ['Not Required', 'Pending', 'Processed', 'Failed'], default: 'Not Required' },
+    refundInitiatedAt: { type: Date },
+    refundedAt:     { type: Date },
 }, { timestamps: true });
+
+// One request per purchased product variant in an order. A product can appear
+// more than once when the customer bought different sizes or colours.
+returnRequestSchema.index({ order: 1, product: 1, originalSize: 1, originalColor: 1 }, { unique: true });
 
 module.exports = mongoose.model('ReturnRequest', returnRequestSchema);
