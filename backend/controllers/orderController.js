@@ -253,8 +253,30 @@ exports.createRazorpayOrder = async (req, res) => {
             totalPrice: pricing.totalPrice,
         });
     } catch (error) {
-        console.error('Razorpay order creation error:', error);
-        res.status(500).json({ message: 'Payment initiation failed', error: error.message });
+        const providerStatus = Number(error.statusCode || error.status || 0);
+        const providerCode = String(error.error?.code || error.code || '');
+        const providerDescription = String(error.error?.description || error.description || error.message || '');
+        console.error('Razorpay order creation error:', {
+            status: providerStatus || undefined,
+            code: providerCode || undefined,
+            description: providerDescription.slice(0, 500),
+        });
+
+        // Return a useful, sanitized message without exposing credentials or request headers.
+        let message = 'Payment initiation failed. Please try again later.';
+        if (/authentication|unauthorized|invalid key|bad request/i.test(providerDescription) || providerCode === 'BAD_REQUEST_ERROR') {
+            message = 'Razorpay rejected the payment request. Check the Razorpay key pair, account activation and payment configuration in the backend environment.';
+        } else if (/network|timeout|ECONN|ENOTFOUND/i.test(providerDescription)) {
+            message = 'Unable to reach Razorpay. Check backend network connectivity and try again.';
+        } else if (providerStatus === 400) {
+            message = 'Razorpay rejected the order details. Check the order amount and currency.';
+        } else if (providerStatus === 401 || providerStatus === 403) {
+            message = 'Razorpay authentication failed. Verify the live/test key pair configured on the backend.';
+        }
+        res.status(providerStatus >= 400 && providerStatus < 500 ? 502 : 503).json({
+            message,
+            code: providerCode || undefined,
+        });
     }
 };
 
